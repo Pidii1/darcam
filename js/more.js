@@ -2,14 +2,19 @@
    car mode, Bahasa Melayu, story pictures, and playlist clean-up (duplicates, merge, smart playlists). */
 'use strict';
 
-const APP_VERSION = '2.5.5';
+const APP_VERSION = '2.5.6';
 const isCap = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 const capPlugin = () => (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.DarcamIsland) || null;
 async function getText(url) {
-    if (window.darcamNative && window.darcamNative.fetchText) return window.darcamNative.fetchText(url);
-    const r = await fetch(url, { cache: 'no-store' });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    return r.text();
+    // normal fetch first (the website allows it); the Windows app's own fetch only as a fallback
+    try {
+        const r = await fetch(url, { cache: 'no-store' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return await r.text();
+    } catch (e) {
+        if (window.darcamNative && window.darcamNative.fetchText) return window.darcamNative.fetchText(url);
+        throw e;
+    }
 }
 function openOutside(url) {
     const p = capPlugin();

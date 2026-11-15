@@ -1,10 +1,10 @@
 {
-  "version": "2.5.5",
+  "version": "2.5.6",
   "notes": [
-    "Test update: Darcam tells you when it has been updated",
-    "The More button in Library opens again"
+    "Updates now work on Windows",
+    "Darcam tells you when it has been updated"
   ],
-  "android": "Darcam-2_5_5.apk",
+  "android": "Darcam-2_5_6.apk",
   "windows": "https://github.com/Pidii1/darcam/releases/latest/download/Darcam-Setup.msi",
   "size": ""
 }
