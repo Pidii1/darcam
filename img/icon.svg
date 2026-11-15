@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#17161A"/><stop offset="1" stop-color="#050506"/>
+    </linearGradient>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FF4F93"/><stop offset="1" stop-color="#E5243B"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FF3D8B" stop-opacity="0.28"/><stop offset="1" stop-color="#FF3D8B" stop-opacity="0"/>
+    </radialGradient>
+    <mask id="m">
+      <rect width="512" height="512" fill="#fff"/>
+      <rect x="213" y="224" width="26" height="64" rx="13" fill="#000"/>
+      <rect x="251" y="194" width="26" height="124" rx="13" fill="#000"/>
+      <rect x="289" y="212" width="26" height="88" rx="13" fill="#000"/>
+    </mask>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <circle cx="262" cy="256" r="200" fill="url(#glow)"/>
+  <g transform="translate(256 256) scale(0.8) translate(-262 -256)">
+    <path d="M152 128 H262 A128 128 0 0 1 262 384 H152 Z" fill="url(#g)" mask="url(#m)" stroke="url(#g)" stroke-width="22" stroke-linejoin="round"/>
+  </g>
+  <rect x="1" y="1" width="510" height="510" fill="none" stroke="#fff" stroke-opacity="0.06" stroke-width="2"/>
+</svg>
