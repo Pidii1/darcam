@@ -7,3 +7,4 @@ This folder is the Darcam web version ready for Vercel.
 - Darcam-2_5_4.apk sits next to index.html, so Android updates download from here.
 - Windows .msi is too big for Vercel: put it on GitHub Releases named Darcam-Setup.msi,
   then change GITHUB-NAME in version.json to your GitHub username.
+
