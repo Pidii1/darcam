@@ -2,7 +2,7 @@
    car mode, Bahasa Melayu, story pictures, and playlist clean-up (duplicates, merge, smart playlists). */
 'use strict';
 
-const APP_VERSION = '2.5.4';
+const APP_VERSION = '2.5.5';
 const isCap = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 const capPlugin = () => (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.DarcamIsland) || null;
 async function getText(url) {
@@ -673,6 +673,10 @@ const Tidy = (() => {
         // 2.5.1: video behind lyrics is on (Wi-Fi only) unless you turn it off yourself
         if (!LS.get('dc_vbg_251', false)) { LS.set('dc_vbg_251', true); if ((Store.settings.videoBg || 'off') === 'off') Store.setSetting('videoBg', 'wifi'); }
         I18n.start();
+        // after an update: say which version you're on now
+        const last = LS.get('dc_last_version', '');
+        if (last && last !== APP_VERSION && Updater.newer(APP_VERSION, last)) setTimeout(() => UI.toast('Darcam updated to ' + APP_VERSION, 'success'), 1500);
+        LS.set('dc_last_version', APP_VERSION);
         try { Tidy.refreshAll(); } catch (e) { console.warn(e); }
         setTimeout(() => Follow.check(), 15000);
         ReleaseNotify.start();

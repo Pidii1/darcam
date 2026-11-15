@@ -1,11 +1,10 @@
 {
-  "version": "2.5.4",
+  "version": "2.5.5",
   "notes": [
-    "The More button in Library opens again (smart playlists, merge playlists)",
-    "Jam no longer ends by itself",
-    "Jam tells you if your website still needs Upstash connected"
+    "Test update: Darcam tells you when it has been updated",
+    "The More button in Library opens again"
   ],
-  "android": "Darcam-2_5_4.apk",
-  "windows": "https://github.com/GITHUB-NAME/darcam/releases/latest/download/Darcam-Setup.msi",
+  "android": "Darcam-2_5_5.apk",
+  "windows": "https://github.com/Pidii1/darcam/releases/latest/download/Darcam-Setup.msi",
   "size": ""
 }
