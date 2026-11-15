@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Darcam</title>
+<meta name="description" content="Darcam: music with synced lyrics. No account needed.">
+<meta name="theme-color" content="#000000">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Darcam">
+<link rel="icon" href="img/favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="img/icon.svg">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
+<style>html,body{background:#000}</style>
+<link rel="stylesheet" href="css/darcam.css">
+</head>
+<body>
+<!-- Opening animation -->
+<div class="splash" id="splash" aria-hidden="true">
+  <div class="sp-glow"></div>
+  <div class="sp-stack">
+    <svg class="sp-mark" viewBox="0 0 512 512">
+      <defs>
+        <linearGradient id="spg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF4F93"/><stop offset=".55" stop-color="#F0284F"/><stop offset="1" stop-color="#E5243B"/></linearGradient>
+      </defs>
+      <path class="sp-fill" d="M150 128 H262 A128 128 0 0 1 262 384 H150 Z" fill="url(#spg)"/>
+      <path class="sp-line" d="M150 128 H262 A128 128 0 0 1 262 384 H150 Z" pathLength="1" fill="none" stroke="url(#spg)" stroke-width="20" stroke-linejoin="round"/>
+      <g class="sp-bars">
+        <rect x="225" y="224" width="26" height="64" rx="13"/>
+        <rect x="263" y="194" width="26" height="124" rx="13"/>
+        <rect x="301" y="212" width="26" height="88" rx="13"/>
+      </g>
+    </svg>
+    <div class="sp-word"><span>d</span><span>a</span><span>r</span><span>c</span><span>a</span><span>m</span><span class="dot">.</span></div>
+  </div>
+</div>
+
+<div class="ambient" aria-hidden="true"></div>
+
+<div class="app" id="app">
+  <!-- Desktop sidebar -->
+  <aside class="side glass">
+    <a class="brand" href="#/home" aria-label="Darcam home">
+      <span class="brand-mark" data-logo></span><span class="brand-word">darcam</span>
+    </a>
+    <nav class="side-nav">
+      <a href="#/home" data-route="home"><i data-ic="home"></i><span>Home</span></a>
+      <a href="#/search" data-route="search"><i data-ic="search"></i><span>Search</span></a>
+    </nav>
+    <div class="lib">
+      <div class="lib-head">
+        <a href="#/library" data-route="library"><i data-ic="library"></i><span>Your Library</span></a>
+        <button class="icon-btn sm" data-action="new-playlist" title="New playlist" aria-label="New playlist"><i data-ic="plus"></i></button>
+      </div>
+      <div class="lib-list" id="sideLibrary"></div>
+    </div>
+  </aside>
+
+  <!-- Main panel -->
+  <main class="main glass">
+    <header class="topbar" id="topbar">
+      <div class="tb-nav">
+        <button class="icon-btn" data-action="back" aria-label="Back"><i data-ic="chevronLeft"></i></button>
+        <button class="icon-btn" data-action="forward" aria-label="Forward"><i data-ic="chevronRight"></i></button>
+      </div>
+      <div class="tb-title" id="tbTitle"></div>
+      <a class="icon-btn" href="#/settings" aria-label="Settings"><i data-ic="settings"></i></a>
+    </header>
+    <div class="view" id="view"></div>
+  </main>
+</div>
+
+<!-- Player bar (desktop) / mini player (mobile) -->
+<footer class="bar glass" id="bar" data-empty="1">
+  <div class="bar-left">
+    <button class="bar-art" data-action="open-np" aria-label="Open player"><img id="barArt" alt=""></button>
+    <div class="bar-meta" data-action="open-np">
+      <div class="bar-title" id="barTitle">Nothing playing</div>
+      <div class="bar-artist" id="barArtist">Pick a song to start</div>
+    </div>
+    <button class="icon-btn like-btn desk-only" data-action="like-current" aria-label="Like"><i data-ic="heart"></i></button>
+  </div>
+  <div class="bar-center">
+    <div class="ctrls">
+      <button class="icon-btn sm" data-action="shuffle" aria-label="Shuffle"><i data-ic="shuffle"></i></button>
+      <button class="icon-btn" data-action="prev" aria-label="Previous"><i data-ic="prev"></i></button>
+      <button class="play-btn" data-action="toggle" aria-label="Play"><i data-ic="play"></i></button>
+      <button class="icon-btn" data-action="next" aria-label="Next"><i data-ic="next"></i></button>
+      <button class="icon-btn sm" data-action="repeat" aria-label="Repeat"><i data-ic="repeat"></i></button>
+    </div>
+    <div class="seek">
+      <span class="time" data-time="cur">0:00</span>
+      <div class="range" data-range="seek"><div class="range-track"><div class="range-fill"></div></div><div class="range-thumb"></div></div>
+      <span class="time" data-time="dur">0:00</span>
+    </div>
+  </div>
+  <div class="bar-right">
+    <button class="icon-btn sm" data-action="np-lyrics" title="Lyrics" aria-label="Lyrics"><i data-ic="lyrics"></i></button>
+    <button class="icon-btn sm" data-action="np-video" title="Video" aria-label="Video"><i data-ic="film"></i></button>
+    <button class="icon-btn sm" data-action="queue" title="Queue" aria-label="Queue"><i data-ic="queue"></i></button>
+    <button class="speed-btn" data-action="speed" title="Playback speed" aria-label="Playback speed"><span>1×</span></button>
+    <button class="icon-btn sm sleep-btn" data-action="sleep" title="Sleep timer" aria-label="Sleep timer"><i data-ic="moon"></i></button>
+    <button class="icon-btn sm electron-only" data-action="mini-player" title="Mini player" aria-label="Mini player"><i data-ic="pip"></i></button>
+    <div class="vol">
+      <button class="icon-btn sm" data-action="mute" aria-label="Mute"><i data-ic="volume"></i></button>
+      <div class="range" data-range="volume"><div class="range-track"><div class="range-fill"></div></div><div class="range-thumb"></div></div>
+    </div>
+    <button class="icon-btn sm" data-action="open-np" title="Full screen" aria-label="Full screen"><i data-ic="expand"></i></button>
+  </div>
+  <div class="mini-actions">
+    <button class="icon-btn like-btn" data-action="like-current" aria-label="Like"><i data-ic="heart"></i></button>
+    <button class="icon-btn mini-play" data-action="toggle" aria-label="Play"><i data-ic="play"></i></button>
+  </div>
+  <div class="mini-progress"><div class="mini-progress-fill"></div></div>
+</footer>
+
+<!-- Mobile tab bar -->
+<nav class="tabs" id="tabs">
+  <a href="#/home" data-route="home"><i data-ic="home"></i><span>Home</span></a>
+  <a href="#/search" data-route="search"><i data-ic="search"></i><span>Search</span></a>
+  <a href="#/library" data-route="library"><i data-ic="library"></i><span>Library</span></a>
+</nav>
+
+<!-- Now Playing -->
+<section class="np" id="np" aria-hidden="true" aria-label="Now playing">
+  <div class="np-bg"><div class="np-bg-img" id="npBg"></div><div class="np-bg-shade"></div></div>
+  <header class="np-head">
+    <button class="icon-btn" data-action="close-np" aria-label="Close"><i data-ic="chevronDown"></i></button>
+    <div class="seg" id="npSeg" role="tablist">
+      <span class="seg-pill"></span>
+      <button data-mode="lyrics" role="tab">Lyrics</button>
+      <button data-mode="video" role="tab">Video</button>
+    </div>
+    <button class="icon-btn" data-action="np-more" aria-label="More"><i data-ic="more"></i></button>
+  </header>
+  <div class="np-body" id="npBody" data-mode="lyrics">
+    <div class="np-stage">
+      <div class="np-art"><img id="npArt" alt=""></div>
+      <div class="np-video" id="npVideo"></div>
+    </div>
+    <div class="np-lyrics" id="npLyrics"></div>
+  </div>
+  <footer class="np-foot">
+    <div class="np-meta">
+      <img class="np-thumb" id="npThumb" alt="">
+      <div class="np-meta-text">
+        <div class="np-title" id="npTitle">—</div>
+        <button class="np-artist" id="npArtist" data-action="np-artist">—</button>
+      </div>
+      <button class="icon-btn like-btn" data-action="like-current" aria-label="Like"><i data-ic="heart"></i></button>
+    </div>
+    <div class="np-seek">
+      <div class="range lg" data-range="seek"><div class="range-track"><div class="range-fill"></div></div><div class="range-thumb"></div></div>
+      <div class="np-times"><span data-time="cur">0:00</span><span data-time="dur">0:00</span></div>
+    </div>
+    <div class="np-ctrls">
+      <button class="icon-btn" data-action="shuffle" aria-label="Shuffle"><i data-ic="shuffle"></i></button>
+      <button class="icon-btn lg" data-action="prev" aria-label="Previous"><i data-ic="prev"></i></button>
+      <button class="play-btn xl" data-action="toggle" aria-label="Play"><i data-ic="play"></i></button>
+      <button class="icon-btn lg" data-action="next" aria-label="Next"><i data-ic="next"></i></button>
+      <button class="icon-btn" data-action="repeat" aria-label="Repeat"><i data-ic="repeat"></i></button>
+    </div>
+    <div class="np-extra">
+      <button class="icon-btn sm" data-action="queue" aria-label="Queue"><i data-ic="queue"></i></button>
+      <button class="speed-btn" data-action="speed" aria-label="Playback speed"><span>1×</span></button>
+      <button class="icon-btn sm sleep-btn" data-action="sleep" aria-label="Sleep timer"><i data-ic="moon"></i></button>
+      <button class="icon-btn sm" data-action="karaoke" aria-label="Full screen lyrics" title="Full screen lyrics"><i data-ic="expand"></i></button>
+      <div class="vol desk-only">
+        <button class="icon-btn sm" data-action="mute" aria-label="Mute"><i data-ic="volume"></i></button>
+        <div class="range" data-range="volume"><div class="range-track"><div class="range-fill"></div></div><div class="range-thumb"></div></div>
+      </div>
+    </div>
+  </footer>
+</section>
+
+<!-- Queue drawer -->
+<aside class="queue glass" id="queue" aria-hidden="true">
+  <header><h3>Queue</h3><button class="icon-btn sm" data-action="queue" aria-label="Close"><i data-ic="x"></i></button></header>
+  <div class="q-body" id="qBody"></div>
+</aside>
+
+<div class="scrim" id="scrim"></div>
+<div class="menu glass" id="menu" role="menu"></div>
+<div class="modal-wrap" id="modal"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- Playback engine (kept out of sight; shown only in Video mode) -->
+<div id="engine" aria-hidden="true"><div class="eng-slot on"><div id="engineFrame"></div></div><div class="eng-slot"><div id="engineFrame2"></div></div></div>
+
+<script src="native.js"></script>
+<script src="js/util.js"></script>
+<script src="js/store.js"></script>
+<script src="js/innertube.js"></script>
+<script src="js/catalog.js"></script>
+<script src="js/player.js"></script>
+<script src="js/lyrics.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/pages.js"></script>
+<script src="js/importer.js"></script>
+<script src="js/extras.js"></script>
+<script src="js/more.js"></script>
+<script src="js/vendor/qrcode.js"></script>
+<script src="js/vendor/jsqr.js"></script>
+<script src="js/transfer.js"></script>
+<script src="js/bridge.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

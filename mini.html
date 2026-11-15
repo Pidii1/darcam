@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Darcam mini player</title>
+<style>
+/* Darcam mini player (Windows): a small always-on-top window. Drag it anywhere. */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; background: #101012; color: #fff; font-family: Inter, 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif; -webkit-font-smoothing: antialiased; user-select: none; }
+body { -webkit-app-region: drag; }
+button, .track { -webkit-app-region: no-drag; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+button svg { pointer-events: none; }
+.bg { position: fixed; inset: -40px; background: center/cover no-repeat; filter: blur(40px) saturate(1.4); opacity: .45; transform: scale(1.1); transition: background-image .4s; }
+.shade { position: fixed; inset: 0; background: linear-gradient(90deg, rgba(10,10,12,.55), rgba(10,10,12,.82)); }
+.wrap { position: relative; display: flex; gap: 14px; height: 100%; padding: 14px; }
+.art { width: 128px; height: 128px; flex-shrink: 0; border-radius: 12px; background: #222 center/cover no-repeat; box-shadow: 0 8px 22px rgba(0,0,0,.45); }
+.side { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.top { display: flex; align-items: flex-start; gap: 6px; }
+.meta { flex: 1; min-width: 0; }
+.title { font-size: 15px; font-weight: 750; letter-spacing: -.015em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.artist { font-size: 12.5px; color: rgba(255,255,255,.62); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.x { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,.55); }
+.x:hover { background: rgba(255,255,255,.1); color: #fff; }
+.x svg { width: 15px; height: 15px; }
+.line { margin-top: 6px; font-size: 13px; font-weight: 700; line-height: 1.3; height: 34px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; color: rgba(255,255,255,.92); }
+.line.dim { color: rgba(255,255,255,.45); }
+.track { position: relative; height: 4px; border-radius: 4px; background: rgba(255,255,255,.2); margin-top: auto; cursor: pointer; }
+.track::before { content: ''; position: absolute; inset: -7px 0; }
+.track i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 4px; background: #fff; }
+.ctrls { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+.ib { width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: rgba(255,255,255,.8); transition: background .15s, transform .2s; }
+.ib:hover { background: rgba(255,255,255,.1); color: #fff; }
+.ib:active { transform: scale(.88); }
+.ib svg { width: 18px; height: 18px; }
+.ib.on { color: #ff3d6e; }
+.mid { display: flex; align-items: center; gap: 6px; }
+.play { width: 38px; height: 38px; border-radius: 50%; background: #fff; color: #000; display: inline-flex; align-items: center; justify-content: center; }
+.play svg { width: 18px; height: 18px; }
+.play:active { transform: scale(.9); }
+.empty { position: relative; display: flex; align-items: center; justify-content: center; height: 100%; color: rgba(255,255,255,.55); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="bg" id="bg"></div><div class="shade"></div>
+<div class="wrap" id="wrap">
+  <div class="art" id="art"></div>
+  <div class="side">
+    <div class="top">
+      <div class="meta"><div class="title" id="title">Nothing playing</div><div class="artist" id="artist">Pick a song in Darcam</div></div>
+      <button class="x" data-c="open" title="Open Darcam"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-8 8M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg></button>
+      <button class="x" data-c="mini-close" title="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <div class="line dim" id="line"></div>
+    <div class="track" id="track"><i id="fill"></i></div>
+    <div class="ctrls">
+      <button class="ib" data-c="like" id="like" title="Like"></button>
+      <div class="mid">
+        <button class="ib" data-c="prev" title="Previous"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5.5h2.2v13H6zM19 6.3v11.4a1 1 0 0 1-1.55.83L9.4 13.1a1.3 1.3 0 0 1 0-2.2l8.05-5.43A1 1 0 0 1 19 6.3z"/></svg></button>
+        <button class="play" data-c="toggle" id="play" title="Play"></button>
+        <button class="ib" data-c="next" title="Next"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.8 5.5H18v13h-2.2zM5 6.3v11.4a1 1 0 0 0 1.55.83l8.05-5.43a1.3 1.3 0 0 0 0-2.2L6.55 5.47A1 1 0 0 0 5 6.3z"/></svg></button>
+      </div>
+      <button class="ib" data-c="open-lyrics" title="Lyrics in Darcam"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4.5h14A2 2 0 0 1 21 6.5v9a2 2 0 0 1-2 2h-8.2l-4.6 3.6a.6.6 0 0 1-1-.5v-3.1H5a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2z"/><path d="M7.5 9.2h9M7.5 12.8h5.5"/></svg></button>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+    const I = {
+        play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7.5 4.9v14.2a1.3 1.3 0 0 0 2 1.1l11-7.1a1.3 1.3 0 0 0 0-2.2l-11-7.1a1.3 1.3 0 0 0-2 1.1z"/></svg>',
+        pause: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4.5" width="4.2" height="15" rx="1.3"/><rect x="13.8" y="4.5" width="4.2" height="15" rx="1.3"/></svg>',
+        heart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 20.3 4.6 13a4.9 4.9 0 0 1 0-7 4.9 4.9 0 0 1 7 0l.4.4.4-.4a4.9 4.9 0 0 1 7 0 4.9 4.9 0 0 1 0 7z"/></svg>',
+        heartOn: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 20.3 4.6 13a4.9 4.9 0 0 1 0-7 4.9 4.9 0 0 1 7 0l.4.4.4-.4a4.9 4.9 0 0 1 7 0 4.9 4.9 0 0 1 0 7z"/></svg>',
+    };
+    const $ = (id) => document.getElementById(id);
+    let S = { has: false }, lastCover = '';
+    const send = (c) => { try { window.darcamIsland && window.darcamIsland.command(c); } catch (e) {} };
+    function setIcon(el, k) { if (el.dataset.icon !== k) { el.dataset.icon = k; el.innerHTML = I[k]; } }
+    function render(s) {
+        S = s || { has: false };
+        if (!S.has) { $('title').textContent = 'Nothing playing'; $('artist').textContent = 'Pick a song in Darcam'; $('line').textContent = ''; setIcon($('play'), 'play'); setIcon($('like'), 'heart'); return; }
+        $('title').textContent = S.title || ''; $('artist').textContent = S.artist || '';
+        const cov = S.coverLg || S.cover || '';
+        if (cov !== lastCover) { lastCover = cov; $('art').style.backgroundImage = cov ? `url("${cov}")` : ''; $('bg').style.backgroundImage = cov ? `url("${cov}")` : ''; }
+        const ly = (S.lyric || '').trim();
+        $('line').textContent = ly === '♪' ? '♪  ♪  ♪' : (ly || '');
+        $('line').classList.toggle('dim', !ly || ly === '♪');
+        setIcon($('play'), S.playing ? 'pause' : 'play');
+        setIcon($('like'), S.liked ? 'heartOn' : 'heart'); $('like').classList.toggle('on', !!S.liked);
+        $('fill').style.width = (S.duration ? Math.min(100, (S.position / S.duration) * 100) : 0) + '%';
+    }
+    document.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-c]');
+        if (b) {
+            const c = b.dataset.c;
+            if (c === 'toggle') send(S.playing ? 'pause' : 'play');
+            else if (c === 'open-lyrics') send('open');
+            else send(c);
+            return;
+        }
+        const tr = e.target.closest('#track');
+        if (tr && S.duration) { const r = tr.getBoundingClientRect(); send({ seek: ((e.clientX - r.left) / r.width) * S.duration }); }
+    });
+    try { window.darcamIsland && window.darcamIsland.onState(render); } catch (e) {}
+    window.addEventListener('message', (e) => { if (e.data && e.data.darcamState) render(e.data.darcamState); });
+    render({ has: false });
+})();
+</script>
+</body>
+</html>
