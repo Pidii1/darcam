@@ -67,6 +67,7 @@ function cleanTrack(t) {
     if (id.length < 6 || id.length > 20) return null;
     const out = { id, name: cleanStr(t.name, 160), artist: cleanStr(t.artist, 120), dur: Math.max(0, Math.min(36000, parseInt(t.dur, 10) || 0)), cover: cleanCover(t.cover) };
     if (t.by) out.by = cleanStr(t.by, 24);
+    if (t.auto) out.auto = 1;          // a suggested song (Darcam added it, nobody picked it)
     return out;
 }
 function safeEq(a, b) { const x = Buffer.from(String(a)), y = Buffer.from(String(b)); return x.length === y.length && crypto.timingSafeEqual(x, y); }
@@ -83,7 +84,8 @@ function membersFrom(flat, now) {
     else if (flat && typeof flat === 'object') Object.values(flat).forEach((v) => { try { list.push(JSON.parse(v)); } catch (e) {} });
     return list.filter((m) => now - m.seen < 20000).sort((a, b) => (b.host ? 1 : 0) - (a.host ? 1 : 0) || a.joined - b.joined);
 }
-const publicRoom = (room, members) => ({ room: room.code, name: room.name, host: room.host, queue: room.queue || [], control: !!room.control, members, ver: room.ver || 0 });
+const publicRoom = (room, members) => ({ room: room.code, name: room.name, host: room.host, queue: room.queue || [], control: !!room.control, autoplay: room.autoplay !== false, members, ver: room.ver || 0 });
+const isKicked = (room, id) => (room.kicked || []).includes(id);
 
 module.exports = async (req, res) => {
     cors(res, 'POST');
@@ -140,6 +142,7 @@ module.exports = async (req, res) => {
                 rate: Math.max(0.5, Math.min(2, parseFloat(input.rate) || 1)), at: now };
             room.queue = queue;
             room.control = input.control !== false;
+            room.autoplay = input.autoplay !== false;
             if (changed) { room.ver = (room.ver || 0) + 1; room.sig = JSON.stringify([track && track.id, queue.map((q) => q.id + (q.by || '')), !!input.control]); }
             const r = await redis([
                 ['SET', K.room(code), JSON.stringify(room), 'EX', TTL],
@@ -158,6 +161,7 @@ module.exports = async (req, res) => {
                 throw new Fail(ended ? 410 : 404, 'The Jam has ended');
             }
             const room = JSON.parse(s);
+            if (isKicked(room, me)) throw new Fail(403, 'The host removed you from the Jam');
             const all = membersFrom(flat, 0);
             const mine = all.find((m) => m.id === me);
             if (mine || all.length < 30) await redis([['HSET', K.mem(code), me, memberRec(false, mine && mine.joined)]]);
@@ -168,21 +172,33 @@ module.exports = async (req, res) => {
         if (op === 'add') {             // friend: add a song (lands in the host's queue)
             const t = cleanTrack(input.track);
             if (!t) throw new Fail(400, 'Bad song');
-            const [exists, len] = await redis([['EXISTS', K.room(code)], ['LLEN', K.adds(code)]]);
-            if (!exists) throw new Fail(404, 'The Jam has ended');
+            const [rs, len] = await redis([['GET', K.room(code)], ['LLEN', K.adds(code)]]);
+            if (!rs) throw new Fail(404, 'The Jam has ended');
+            if (isKicked(JSON.parse(rs), me)) throw new Fail(403, 'The host removed you from the Jam');
             if (len >= 50) throw new Fail(429, 'Too many songs waiting, try again in a moment');
             await redis([['RPUSH', K.adds(code), JSON.stringify({ ...t, by: myName, byId: me, next: !!input.next })], ['EXPIRE', K.adds(code), TTL]]);
             return out(200, { ok: true });
         }
         if (op === 'cmd') {             // friend: play / pause / skip for everyone (if the host allows it)
             const room = await loadRoom(code);
-            if (!room.control) throw new Fail(403, 'The host turned off controls for friends');
+            if (isKicked(room, me)) throw new Fail(403, 'The host removed you from the Jam');
             const c = String(input.cmd || '');
-            if (!['play', 'pause', 'next', 'prev', 'jump'].includes(c)) throw new Fail(400, 'Bad request');
+            if (!['play', 'pause', 'next', 'prev', 'jump', 'remove'].includes(c)) throw new Fail(400, 'Bad request');
+            if (c !== 'remove' && !room.control) throw new Fail(403, 'The host turned off controls for friends');
             const cmd = { cmd: c, by: myName, at: now };
-            if (c === 'jump') { cmd.id = String(input.id || '').replace(/[^A-Za-z0-9_\-]/g, '').slice(0, 20); cmd.i = Math.max(0, Math.min(49, parseInt(input.i, 10) || 0)); }
+            if (c === 'remove') cmd.name = cleanStr(input.name, 160);
+            if (c === 'jump' || c === 'remove') { cmd.id = String(input.id || '').replace(/[^A-Za-z0-9_\-]/g, '').slice(0, 20); cmd.i = Math.max(0, Math.min(49, parseInt(input.i, 10) || 0)); }
             await redis([['RPUSH', K.cmds(code), JSON.stringify(cmd)], ['EXPIRE', K.cmds(code), TTL]]);
             return out(200, { ok: true });
+        }
+        if (op === 'kick') {            // host removes someone
+            const room = await loadRoom(code);
+            if (!safeEq(room.token, input.token || '')) throw new Fail(403, 'Only the host can do that');
+            const who = cleanId(input.who);
+            if (!who || who === room.host.id) throw new Fail(400, 'Bad request');
+            room.kicked = [...new Set([...(room.kicked || []), who])].slice(-100);
+            const r = await redis([['SET', K.room(code), JSON.stringify(room), 'EX', TTL], ['HDEL', K.mem(code), who], ['HGETALL', K.mem(code)]]);
+            return out(200, { ok: true, members: membersFrom(r[2], now) });
         }
         if (op === 'leave') {           // friend leaves
             await redis([['HDEL', K.mem(code), me]]);

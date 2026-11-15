@@ -1,10 +1,12 @@
 {
-  "version": "2.5.6",
+  "version": "2.6.0",
   "notes": [
-    "Updates now work on Windows",
-    "Darcam tells you when it has been updated"
+    "Jam: the music no longer pauses when someone leaves the app",
+    "Jam: songs Darcam adds are marked Suggested, and the host can turn them off",
+    "Jam: host can drag songs to reorder, remove songs and remove people",
+    "Jam carries on when Darcam is closed and opened again"
   ],
-  "android": "Darcam-2_5_6.apk",
+  "android": "Darcam-2_6_0.apk",
   "windows": "https://github.com/Pidii1/darcam/releases/latest/download/Darcam-Setup.msi",
   "size": ""
 }

@@ -320,12 +320,14 @@ const Player = (() => {
         if (!Store.settings.autoplay || !current()) return Promise.resolve(false);
         if (P.index < P.queue.length - 1) return Promise.resolve(true);
         if (P.source && P.source.type === 'jam' && typeof Jam !== 'undefined' && Jam.active && !Jam.host) return Promise.resolve(false);   // in a friend's Jam the host picks the next song
+        if (typeof Jam !== 'undefined' && Jam.active && Jam.host && !Jam.autoplay) return Promise.resolve(false);   // host turned off suggested songs
         if (morePromise) return morePromise;
         radioLoading = true;
         morePromise = (async () => {
             try {
                 const more = await Catalog.radio(current(), { exclude: P.queue.map((q) => q.id) });
                 const fresh = more.filter((t) => !P.queue.some((q) => q.id === t.id)).slice(0, 15);
+                fresh.forEach((t) => (t._auto = true));     // shown as "Suggested" in a Jam
                 if (!fresh.length) return false;
                 P.queue.push(...fresh);
                 if (P.original) P.original.push(...fresh);

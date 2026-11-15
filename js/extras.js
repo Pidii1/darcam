@@ -591,12 +591,14 @@ const ShareLink = (() => {
 const Jam = (() => {
     // A Jam works like Spotify's: the host's Darcam is in charge of the music. Friends hear the same
     // song on their own device, see one shared queue, add songs with their name on them, and can
-    // play / pause / skip for everyone when the host allows it.
-    let J = null;      // { room, token?, host, members, queue, track, control, name }
+    // play / pause / skip for everyone when the host allows it. The host can reorder the queue by
+    // dragging, remove songs and remove people. A Jam carries on if Darcam is closed and reopened.
+    let J = null;      // { room, token?, host, members, queue, track, control, autoplay, intent, name }
     const me = (() => { let id = localStorage.getItem('dc_me'); if (!id) { id = Math.random().toString(36).slice(2, 12); localStorage.setItem('dc_me', id); } return id; })();
     const myName = () => localStorage.getItem('dc_name') || 'Friend';
     const P0 = {};     // the player's own functions (friends' buttons are routed through the Jam)
     ['toggle', 'play', 'pause', 'next', 'prev', 'playList', 'playNext', 'addToQueue', 'jump'].forEach((k) => (P0[k] = Player[k]));
+    const SAVE = 'dc_jam_session';
 
     async function call(body) {
         const url = Site.api('jam.php');
@@ -607,18 +609,20 @@ const Jam = (() => {
         return j;
     }
     const vid = (t) => t && (t.youtube_id || t.id);
-    const slim = (t) => t && ({ id: vid(t), name: T.title(t), artist: T.artist(t), dur: Math.round((t.duration_ms || 0) / 1000), cover: T.cover(t), by: t._by || '' });
+    const isSuggested = (t) => !t._by && (t._auto || t.smart);
+    const slim = (t) => t && ({ id: vid(t), name: T.title(t), artist: T.artist(t), dur: Math.round((t.duration_ms || 0) / 1000), cover: T.cover(t), by: t._by || '', auto: isSuggested(t) ? 1 : 0 });
     const toTrack = (x) => ({ id: x.id, youtube_id: x.id, name: x.name, artists: [{ name: x.artist || 'Unknown', id: '' }], album: { name: x.artist, images: [{ url: x.cover || `https://i.ytimg.com/vi/${x.id}/mqdefault.jpg` }] },
         cover: x.cover || `https://i.ytimg.com/vi/${x.id}/mqdefault.jpg`, cover_lg: x.cover ? x.cover.replace(/=w\d+-h\d+/, '=w544-h544') : `https://i.ytimg.com/vi/${x.id}/hqdefault.jpg`, duration_ms: (x.dur || 0) * 1000, kind: 'song', _n: 1, _by: x.by || '' });
     const COLORS = ['#f59e0b', '#22c55e', '#38bdf8', '#a78bfa', '#f472b6', '#fb7185', '#facc15', '#2dd4bf'];
     const colorOf = (s) => {
-        // people in the Jam get different colours in the order they joined
-        const i = J ? J.members.findIndex((m) => m.name === s) : -1;
+        const i = J ? J.members.findIndex((m) => m.name === s) : -1;   // people get colours in the order they joined
         if (i >= 0) return COLORS[i % COLORS.length];
         let h = 0; for (const c of String(s)) h = (h * 131 + c.charCodeAt(0)) >>> 0; return COLORS[h % COLORS.length];
     };
     const avatar = (name, cls = '') => `<i class="jam-av ${cls}" style="background:${colorOf(name)}">${esc((name || '?').trim()[0] || '?').toUpperCase()}</i>`;
     const toast = (msg, type) => Bus.emit('toast', { msg, type });
+    const save = () => { if (J) LS.set(SAVE, { room: J.room, token: J.token || '', host: J.host, at: Date.now() }); };
+    const forget = () => localStorage.removeItem(SAVE);
 
     function askName(then) {
         if (localStorage.getItem('dc_name')) return then();
@@ -630,34 +634,44 @@ const Jam = (() => {
         askName(async () => {
             try {
                 const r = await call({ op: 'create', title: myName() + '’s Jam' });
-                J = { room: r.room, token: r.token, host: true, members: [{ id: me, name: myName(), host: true }], control: LS.get('dc_jam_control', true), queue: [], miss: 0 };
-                Player.state.queue.forEach((t, i) => { if (t && !t._by && i >= Player.state.index) t._by = myName(); });
+                J = hostState(r.room, r.token);
+                Player.state.queue.forEach((t, i) => { if (t && !t._by && !t._auto && !t.smart && i >= Player.state.index) t._by = myName(); });
+                save();
                 await hostLoop();
                 J.timer = setInterval(hostLoop, 1500);
                 paint(); openPanel(); showInvite();
             } catch (e) { toast(e.message, 'error'); }
         });
     }
+    const hostState = (room, token) => ({ room, token, host: true, members: [{ id: me, name: myName(), host: true }], control: LS.get('dc_jam_control', true),
+        autoplay: LS.get('dc_jam_autoplay', true), queue: [], miss: 0, intent: !!Player.state.playing, stuck: 0 });
+    const setIntent = (v) => { if (J && J.host) J.intent = !!v; };
     let sending = false, again = false;
     async function hostLoop() {
         if (!J || !J.host) return;
         if (sending) { again = true; return; }
         sending = true;
         const P = Player.state, t = Player.current();
+        // if the phone or PC paused the music by itself (app in the background), start it again:
+        // friends follow what the host wants, not hiccups
+        let st = -1; try { st = Player.engine ? Player.engine.getPlayerState() : -1; } catch (e) {}
+        if (st === 0 && P.index >= P.queue.length - 1) J.intent = false;          // the last song ended
+        if (J.intent && t && !P.playing && !P.buffering) { if (++J.stuck >= 2) { J.stuck = 0; P0.play(true); } } else J.stuck = 0;
         const upcoming = P.queue.slice(P.index + 1, P.index + 51);
         try {
-            const r = await call({ op: 'state', room: J.room, token: J.token, track: slim(t), queue: upcoming.map(slim), pos: Player.time(), playing: P.playing, rate: P.rate || 1, control: J.control });
-            const before = J.members.length;
+            const r = await call({ op: 'state', room: J.room, token: J.token, track: slim(t), queue: upcoming.map(slim), pos: Player.time(),
+                playing: !!(t && J.intent), rate: P.rate || 1, control: J.control, autoplay: J.autoplay });
+            const before = J.members.map((m) => m.id);
             J.members = r.members || J.members;
-            if (J.members.length > before && before) { const n = J.members[J.members.length - 1]; if (n && !n.host) toast(`${n.name} joined the Jam`); }
+            if (before.length) J.members.forEach((m) => { if (!m.host && !before.includes(m.id)) toast(`${m.name} joined the Jam`); });
             (r.adds || []).forEach(addFromFriend);
             (r.cmds || []).forEach(runCmd);
             J.track = slim(Player.current()); J.queue = Player.state.queue.slice(Player.state.index + 1, Player.state.index + 51).map(slim);
+            J.hostState = { playing: J.intent, pos: Player.time(), at: Date.now(), rate: P.rate || 1, dur: P.duration };
             paint(); renderPanel();
             J.miss = 0;
         } catch (e) {
-            // only end after several "not found" answers in a row (one can be a hiccup)
-            if (e.status === 404 && ++J.miss >= 4) { toast('The Jam has ended'); stop(); }
+            if ((e.status === 404 || e.status === 410) && ++J.miss >= 4) { toast('The Jam has ended'); stop(); }
             else console.warn('jam', e.message);
         } finally {
             sending = false;
@@ -666,28 +680,34 @@ const Jam = (() => {
     }
     function addFromFriend(x) {
         const t = toTrack(x), P = Player.state;
-        if (!Player.current()) { P0.playList([t], 0, { type: 'jam', name: 'Jam' }); }
+        if (!Player.current()) { P0.playList([t], 0, { type: 'jam', name: 'Jam' }); setIntent(true); }
         else {
-            // friends' songs go after the other friends' songs, before the rest of the queue (like Spotify)
+            // friends' songs go after the songs people added, before suggestions (like Spotify)
             let at = P.index + 1;
-            while (at < P.queue.length && P.queue[at]._by && P.queue[at]._by !== myName()) at++;
-            if (x.next) at = P.index + 1;
+            if (!x.next) while (at < P.queue.length && P.queue[at]._by) at++;
             P.queue.splice(at, 0, t);
             if (P.original) P.original.push(t);
             Bus.emit('queue', P);
         }
         toast(`${x.by} added “${x.name}”`);
     }
-    function runCmd(c) {
+    function findUpcoming(id, i) {
         const P = Player.state;
-        if (c.cmd === 'play') P0.play();
-        if (c.cmd === 'pause') P0.pause();
-        if (c.cmd === 'next') P0.next();
-        if (c.cmd === 'prev') P0.prev();
-        if (c.cmd === 'jump') {
-            let i = P.index + 1 + (c.i || 0);
-            if (!P.queue[i] || vid(P.queue[i]) !== c.id) i = P.queue.findIndex((q, k) => k > P.index && vid(q) === c.id);
-            if (i > P.index) P0.jump(i);
+        let k = P.index + 1 + (i || 0);
+        if (!P.queue[k] || vid(P.queue[k]) !== id) k = P.queue.findIndex((q, n) => n > P.index && vid(q) === id);
+        return k > P.index ? k : -1;
+    }
+    function runCmd(c) {
+        if (c.cmd === 'play') { setIntent(true); P0.play(true); }
+        if (c.cmd === 'pause') { setIntent(false); P0.pause(); }
+        if (c.cmd === 'next') { setIntent(true); P0.next(); }
+        if (c.cmd === 'prev') { setIntent(true); P0.prev(); }
+        if (c.cmd === 'jump') { const k = findUpcoming(c.id, c.i); if (k > 0) { setIntent(true); P0.jump(k); } }
+        if (c.cmd === 'remove') {
+            // friends can only take out songs they added themselves
+            const k = findUpcoming(c.id, c.i);
+            if (k > 0 && Player.state.queue[k]._by === c.by) { Player.removeAt(k); toast(`${c.by} removed “${c.name || 'a song'}”`); }
+            return;
         }
         const what = { play: 'pressed play', pause: 'paused', next: 'skipped', prev: 'went back', jump: 'picked a song' }[c.cmd];
         if (what) toast(`${c.by} ${what}`);
@@ -698,19 +718,20 @@ const Jam = (() => {
     Bus.on('queue', pushSoon);
 
     // ---------------- friend ----------------
-    function join(code) {
+    function join(code, quiet) {
         code = (code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
         if (!code) return;
         askName(async () => {
             try {
-                if (J) leave(true);
+                if (J && J.room !== code) leave(true);
                 J = { room: code, host: false, members: [], queue: [], track: null, control: false, lastVer: -1, miss: 0 };
                 await memberLoop(true);
                 if (!J) return;
+                save();
                 J.timer = setInterval(memberLoop, 1500);
-                toast('You joined ' + (J.name || 'the Jam'), 'success');
-                paint(); openPanel();
-            } catch (e) { J = null; toast(e.message, 'error'); paint(); }
+                if (!quiet) { toast('You joined ' + (J.name || 'the Jam'), 'success'); openPanel(); }
+                paint();
+            } catch (e) { J = null; if (quiet) forget(); else toast(e.message, 'error'); paint(); }
         });
     }
     let reading = false;
@@ -722,19 +743,19 @@ const Jam = (() => {
         catch (e) {
             reading = false;
             if (first) throw e;
+            if (J && e.status === 403) { toast(e.message); stop(); return; }
             if (J && (e.status === 410 || (e.status === 404 && ++J.miss >= 4))) { toast('The Jam has ended'); stop(); }
             return;
         }
         reading = false;
         if (!J) return;
         J.miss = 0;
-        // tell who added what
         if (J.lastVer >= 0 && g.ver !== J.lastVer) {
             const old = new Set(J.queue.map((q) => q.id + '|' + (q.by || '')));
             (g.queue || []).forEach((q) => { if (q.by && q.by !== myName() && !old.has(q.id + '|' + q.by)) toast(`${q.by} added “${q.name}”`); });
         }
         J.lastVer = g.ver; J.members = g.members || []; J.name = g.name; J.queue = g.queue || []; J.control = !!g.control; J.hostName = (g.host || {}).name;
-        J.track = (g.host || {}).track; J.hostState = g.host;
+        J.track = (g.host || {}).track; J.hostState = { ...(g.host || {}), at: (g.host || {}).at + (Date.now() - g.now) };   // host time → this device's clock
         paint(); renderPanel();
         follow(g);
     }
@@ -753,53 +774,59 @@ const Jam = (() => {
         if (J.pauseAfterLoad && Player.state.playing) { P0.pause(); J.pauseAfterLoad = false; }
         if ((Player.state.rate || 1) !== (h.rate || 1)) Player.setRate(h.rate || 1);
         if (J.hold && Date.now() < J.hold) return;       // just pressed a button: give the host a moment
-        if (h.playing && !Player.state.playing && !Player.state.buffering) P0.play();
+        // every pause button goes through the Jam, so a pause here came from the phone itself
+        // (app in the background, call, etc.): keep following the host
+        if (h.playing && !Player.state.playing && !Player.state.buffering) P0.play(true);
         if (!h.playing && Player.state.playing) P0.pause();
-        if (h.playing && Math.abs(Player.time() - target) > 2) Player.seek(target);
+        const drift = Math.abs(Player.time() - target);
+        if (h.playing && drift > (document.hidden ? 8 : 2.5)) Player.seek(target);
     }
     async function cmd(c, extra) {
         if (!J || J.host) return;
-        if (!J.control) { toast(`Only ${J.hostName || 'the host'} can control the music in this Jam`); return; }
-        J.hold = Date.now() + 2500;
-        if (c === 'play') P0.play();
-        if (c === 'pause') P0.pause();
+        if (c !== 'remove' && !J.control) { toast(`Only ${J.hostName || 'the host'} can control the music in this Jam`); return; }
+        if (c === 'play' || c === 'pause') { J.hold = Date.now() + 2500; c === 'play' ? P0.play(true) : P0.pause(); }
         try { await call({ op: 'cmd', room: J.room, cmd: c, ...(extra || {}) }); setTimeout(memberLoop, 600); }
         catch (e) { toast(e.message, 'error'); }
     }
     async function add(t, next) {
         if (!J) return false;
         t = Catalog.normalize(t);
-        if (t.pending) { try { t = await Player.resolvePending(t); } catch (e) {} }
+        if (t.pending) { try { await Player.resolvePending(t); } catch (e) {} }
         if (J.host) { t._by = myName(); next ? P0.playNext(t) : P0.addToQueue(t); return true; }
-        try { await call({ op: 'add', room: J.room, track: slim(t), next: !!next }); toast('Added to the Jam', 'success'); setTimeout(memberLoop, 600); }
+        try { await call({ op: 'add', room: J.room, track: slim(t), next: !!next }); toast(next ? 'Plays next in the Jam' : 'Added to the Jam', 'success'); setTimeout(memberLoop, 600); }
         catch (e) { toast(e.message, 'error'); }
         return true;
     }
 
-    // friends' buttons go to the Jam instead of only their own player
+    // buttons everywhere (player bar, island, notification, keyboard) go through here
     const guest = () => J && !J.host;
-    Player.toggle = () => (guest() ? cmd(Player.state.playing ? 'pause' : 'play') : P0.toggle());
-    Player.play = () => (guest() ? cmd('play') : P0.play());
-    Player.pause = () => (guest() ? cmd('pause') : P0.pause());
-    Player.next = (...a) => (guest() ? cmd('next') : P0.next(...a));
-    Player.prev = () => (guest() ? cmd('prev') : P0.prev());
-    Player.playNext = (t) => (guest() ? add(t, true) : P0.playNext(t));
-    Player.addToQueue = (t) => (guest() ? add(t, false) : P0.addToQueue(t));
+    Player.toggle = () => (guest() ? cmd(Player.state.playing ? 'pause' : 'play') : (setIntent(!Player.state.playing), P0.toggle()));
+    Player.play = (...a) => (guest() ? cmd('play') : (setIntent(true), P0.play(...a)));
+    Player.pause = () => (guest() ? cmd('pause') : (setIntent(false), P0.pause()));
+    Player.next = (...a) => (guest() ? cmd('next') : (a[0] !== true && setIntent(true), P0.next(...a)));
+    Player.prev = () => (guest() ? cmd('prev') : (setIntent(true), P0.prev()));
+    Player.playNext = (t) => (guest() ? add(t, true) : (J && J.host && t && !t._by && (t._by = myName()), P0.playNext(t)));
+    Player.addToQueue = (t) => (guest() ? add(t, false) : (J && J.host && t && !t._by && (t._by = myName()), P0.addToQueue(t)));
     Player.playList = (tracks, i = 0, src) => {
         if (!guest()) {
-            if (J && J.host) (tracks || []).forEach((t) => t && !t._by && (t._by = myName()));
+            if (J && J.host) { (tracks || []).forEach((t) => t && !t._by && (t._by = myName())); setIntent(true); }
             return P0.playList(tracks, i, src);
         }
         const t = (tracks || [])[i];
         if (t) add(t, false);
     };
-    Player.jump = (i) => (guest() ? null : P0.jump(i));
+    Player.jump = (i) => (guest() ? null : (setIntent(true), P0.jump(i)));
+    if ('mediaSession' in navigator) {
+        const set = (a, f) => { try { navigator.mediaSession.setActionHandler(a, f); } catch (e) {} };
+        set('play', () => Player.play()); set('pause', () => Player.pause());
+        set('previoustrack', () => Player.prev()); set('nexttrack', () => Player.next());
+    }
 
-    // ---------------- leaving ----------------
+    // ---------------- leaving / coming back ----------------
     function stop() {
         if (!J) return;
         clearInterval(J.timer);
-        J = null; paint(); closePanel();
+        J = null; forget(); paint(); closePanel();
     }
     function leave(quiet) {
         if (!J) return;
@@ -809,7 +836,16 @@ const Jam = (() => {
         stop();
         if (!quiet) toast(wasHost ? 'You ended the Jam' : 'You left the Jam');
     }
-    window.addEventListener('pagehide', () => { if (J && !J.host) navigator.sendBeacon && navigator.sendBeacon(Site.api('jam.php'), new Blob([JSON.stringify({ op: 'leave', room: J.room, me, name: myName() })], { type: 'application/json' })); });
+    // Darcam was closed (or Android stopped it in the background): carry on with the same Jam
+    setTimeout(() => {
+        const s = LS.get(SAVE, null);
+        if (!s || J || Date.now() - s.at > 8 * 3600e3) return;
+        if (s.host) {
+            J = hostState(s.room, s.token);
+            J.intent = false;
+            hostLoop().then(() => { if (!J) return; J.timer = setInterval(hostLoop, 1500); paint(); toast('Back in your Jam'); });
+        } else join(s.room, true);
+    }, 2500);
 
     // ---------------- screen ----------------
     const invite = () => (J ? (Site.base() ? Site.base() + '#/jam/' + J.room : '') : '');
@@ -821,7 +857,7 @@ const Jam = (() => {
         const avs = J.members.slice(0, 4).map((m) => avatar(m.name, 'xs')).join('');
         chip.innerHTML = `<i class="jam-live"></i><span>Jam</span><span class="jam-avs">${avs}</span>${J.members.length > 4 ? `<span>+${J.members.length - 4}</span>` : ''}`;
     }
-    let panelEl = null;
+    let panelEl = null, progTimer = null;
     function openPanel() {
         if (!J) return;
         if (!panelEl) {
@@ -830,53 +866,117 @@ const Jam = (() => {
             panelEl.innerHTML = `<div class="jam-back" data-jam="close"></div><aside class="jam-panel" role="dialog" aria-label="Jam"><div class="jam-body"></div></aside>`;
             document.body.appendChild(panelEl);
             panelEl.addEventListener('click', onPanelClick);
-            panelEl.addEventListener('change', (e) => { if (e.target.id === 'jamControl' && J && J.host) { J.control = e.target.checked; LS.set('dc_jam_control', J.control); hostLoop(); toast(J.control ? 'Friends can play, pause and skip' : 'Only you can control the music'); } });
+            panelEl.addEventListener('pointerdown', onGrip);
+            panelEl.addEventListener('change', (e) => {
+                if (!J || !J.host) return;
+                if (e.target.id === 'jamControl') { J.control = e.target.checked; LS.set('dc_jam_control', J.control); toast(J.control ? 'Friends can play, pause and skip' : 'Only you can control the music'); }
+                if (e.target.id === 'jamAuto') { J.autoplay = e.target.checked; LS.set('dc_jam_autoplay', J.autoplay); toast(J.autoplay ? 'Darcam adds suggested songs when the queue runs out' : 'No suggested songs: the music stops when the queue ends'); }
+                hostLoop();
+            });
+            progTimer = setInterval(paintProgress, 500);
         }
         renderPanel(true);
         requestAnimationFrame(() => panelEl && panelEl.classList.add('show'));
     }
-    function closePanel() { if (!panelEl) return; const x = panelEl; panelEl = null; x.classList.remove('show'); setTimeout(() => x.remove(), 250); }
-    function renderPanel(force) {
+    function closePanel() { if (!panelEl) return; const x = panelEl; panelEl = null; clearInterval(progTimer); x.classList.remove('show'); setTimeout(() => x.remove(), 250); }
+    function paintProgress() {
         if (!panelEl || !J) return;
+        const bar = panelEl.querySelector('.jam-prog i'); if (!bar) return;
+        const h = J.hostState || {};
+        const dur = J.host ? Player.state.duration : ((J.track && J.track.dur) || 0);
+        const pos = J.host ? Player.time() : (h.pos || 0) + (h.playing ? ((Date.now() - (h.at || Date.now())) / 1000) * (h.rate || 1) : 0);
+        bar.style.width = (dur ? Math.min(100, (pos / dur) * 100) : 0) + '%';
+        const tt = panelEl.querySelector('.jam-time'); if (tt) tt.textContent = `${fmtTime(pos)} / ${fmtTime(dur)}`;
+    }
+    function renderPanel(force) {
+        if (!panelEl || !J || drag) return;
         const body = panelEl.querySelector('.jam-body');
         const canControl = J.host || J.control;
         const nowT = J.track;
-        const st = J.host ? Player.state : (J.hostState || {});
+        const playing = J.host ? J.intent : !!(J.hostState || {}).playing;
+        const mine = (q) => q.by && q.by === myName();
+        const byChip = (q) => q.by ? `<span class="jam-by" title="Added by ${esc(q.by)}">${avatar(q.by, 'xs')}<em>${esc(mine(q) ? 'You' : q.by)}</em></span>`
+            : q.auto ? `<span class="jam-by jam-sug" title="Suggested by Darcam">${ic('sparkle')}<em>Suggested</em></span>` : '';
         const row = (q, i) => `<div class="jam-row ${canControl ? 'tap' : ''}" data-jam="jump" data-i="${i}" data-id="${esc(q.id)}">
+            ${J.host ? `<span class="jam-grip" data-grip="${i}" title="Drag to reorder">${ic('grip')}</span>` : ''}
             <img class="jam-cv" src="${esc(q.cover || `https://i.ytimg.com/vi/${q.id}/mqdefault.jpg`)}" alt="" loading="lazy">
             <span class="jam-tx"><b>${esc(q.name)}</b><small>${esc(q.artist || '')}</small></span>
-            ${q.by ? `<span class="jam-by" title="Added by ${esc(q.by)}">${avatar(q.by, 'xs')}<em>${esc(q.by === myName() ? 'You' : q.by)}</em></span>` : ''}
-            ${J.host ? `<button class="icon-btn sm" data-jam="remove" data-i="${i}" aria-label="Remove from queue">${ic('x')}</button>` : ''}</div>`;
+            ${byChip(q)}
+            ${J.host || mine(q) ? `<button class="icon-btn sm" data-jam="remove" data-i="${i}" aria-label="Remove from queue">${ic('x')}</button>` : ''}</div>`;
         const html = `
             <header class="jam-head">
                 <div><span class="jam-tag"><i class="jam-live"></i>JAM</span><h3>${esc(J.host ? myName() + '’s Jam' : (J.name || 'Jam'))}</h3></div>
                 <button class="icon-btn" data-jam="close" aria-label="Close">${ic('x')}</button>
             </header>
             <div class="jam-people">
-                ${J.members.map((m) => `<span class="jam-person" title="${esc(m.name)}${m.host ? ' (host)' : ''}">${avatar(m.name, m.host ? 'host' : '')}<small>${esc(m.id === me ? 'You' : m.name)}</small></span>`).join('')}
+                ${J.members.map((m) => `<button class="jam-person ${J.host && !m.host ? 'can' : ''}" data-jam="person" data-id="${esc(m.id)}" data-name="${esc(m.name)}" title="${esc(m.name)}${m.host ? ' (host)' : ''}">${avatar(m.name, m.host ? 'host' : '')}<small>${esc(m.id === me ? 'You' : m.name)}</small>${m.host ? '<em class="jam-hostlbl">Host</em>' : ''}</button>`).join('')}
                 <button class="jam-person add" data-jam="invite"><i class="jam-av plus">${ic('plus')}</i><small>Invite</small></button>
             </div>
-            ${J.host ? `<label class="jam-switch"><span><b>Let friends control the music</b><small>Play, pause, skip and pick from the queue</small></span><input type="checkbox" class="switch" id="jamControl" ${J.control ? 'checked' : ''}></label>`
-                : `<p class="jam-note">${J.control ? 'You can play, pause and skip for everyone.' : `Only ${esc(J.hostName || 'the host')} can control the music. You can still add songs.`}</p>`}
+            ${J.host ? `<div class="jam-switches">
+                <label class="jam-switch"><span><b>Let friends control the music</b><small>Play, pause, skip and pick from the queue</small></span><input type="checkbox" class="switch" id="jamControl" ${J.control ? 'checked' : ''}></label>
+                <label class="jam-switch"><span><b>Suggested songs</b><small>When the queue runs out, Darcam adds similar songs (marked Suggested)</small></span><input type="checkbox" class="switch" id="jamAuto" ${J.autoplay ? 'checked' : ''}></label></div>`
+                : `<p class="jam-note">${J.control ? 'You can play, pause and skip for everyone. Songs you add show your name.' : `Only ${esc(J.hostName || 'the host')} can control the music. You can still add songs.`}</p>`}
             <div class="jam-sec">Now playing</div>
             ${nowT ? `<div class="jam-now">
                 <img class="jam-cv lg" src="${esc(nowT.cover || `https://i.ytimg.com/vi/${nowT.id}/mqdefault.jpg`)}" alt="">
-                <span class="jam-tx"><b>${esc(nowT.name)}</b><small>${esc(nowT.artist || '')}</small>${nowT.by ? `<span class="jam-by">${avatar(nowT.by, 'xs')}<em>Added by ${esc(nowT.by === myName() ? 'you' : nowT.by)}</em></span>` : ''}</span>
-                ${canControl ? `<span class="jam-ctl"><button class="icon-btn" data-jam="prev" aria-label="Previous">${ic('prev')}</button><button class="icon-btn jam-pp" data-jam="toggle" aria-label="Play or pause">${ic(st.playing ? 'pause' : 'play')}</button><button class="icon-btn" data-jam="next" aria-label="Next">${ic('next')}</button></span>` : ''}
+                <span class="jam-tx"><b>${esc(nowT.name)}</b><small>${esc(nowT.artist || '')}</small>${byChip(nowT)}</span>
+                <div class="jam-prog"><i></i></div><span class="jam-time"></span>
+                ${canControl ? `<span class="jam-ctl"><button class="icon-btn" data-jam="prev" aria-label="Previous">${ic('prev')}</button><button class="icon-btn jam-pp" data-jam="toggle" aria-label="${playing ? 'Pause' : 'Play'}">${ic(playing ? 'pause' : 'play')}</button><button class="icon-btn" data-jam="next" aria-label="Next">${ic('next')}</button></span>` : ''}
             </div>` : `<p class="jam-note">Nothing playing yet${J.host ? '. Play a song to start.' : '.'}</p>`}
-            <div class="jam-sec">Up next <span>${J.queue.length ? J.queue.length + (J.queue.length === 1 ? ' song' : ' songs') : ''}</span></div>
+            <div class="jam-sec">Up next <span>${J.queue.length ? J.queue.length + (J.queue.length === 1 ? ' song' : ' songs') : ''}${J.host && J.queue.length > 1 ? ' · drag ⠿ to reorder' : ''}</span></div>
             <div class="jam-q">${J.queue.length ? J.queue.map(row).join('') : '<p class="jam-note">The queue is empty. Add a song!</p>'}</div>
             <div class="jam-foot">
                 <button class="btn primary" data-jam="add">${ic('plus')}<span>Add songs</span></button>
                 <button class="btn ghost danger-t" data-jam="leave">${J.host ? 'End Jam' : 'Leave Jam'}</button>
             </div>`;
         if (force || body.dataset.h !== html) {
-            const sc = body.querySelector('.jam-q') ? body.scrollTop : 0;
+            const sc = body.scrollTop;
             body.innerHTML = html; body.dataset.h = html; hydrateIcons(body); body.scrollTop = sc;
         }
+        paintProgress();
+    }
+    // host: drag a song by its ⠿ handle to change the order (mouse or finger)
+    let drag = null;
+    function onGrip(e) {
+        const g = e.target.closest('[data-grip]');
+        if (!g || !J || !J.host) return;
+        e.preventDefault();
+        const row = g.closest('.jam-row'), list = row.parentElement;
+        const rows = [...list.querySelectorAll('.jam-row')];
+        const from = +g.dataset.grip, h = row.getBoundingClientRect().height;
+        drag = { from, to: from, y0: e.clientY, row, rows, h };
+        row.classList.add('dragging');
+        const move = (ev) => {
+            if (!drag) return;
+            const dy = ev.clientY - drag.y0;
+            row.style.transform = `translateY(${dy}px)`;
+            const to = Math.max(0, Math.min(rows.length - 1, from + Math.round(dy / h)));
+            if (to !== drag.to) {
+                drag.to = to;
+                rows.forEach((r, k) => { if (r === row) return; const shift = (from < to && k > from && k <= to) ? -h : (from > to && k < from && k >= to) ? h : 0; r.style.transform = shift ? `translateY(${shift}px)` : ''; });
+            }
+            const pr = panelEl.querySelector('.jam-body'), br = pr.getBoundingClientRect();   // scroll near the edges
+            if (ev.clientY < br.top + 40) pr.scrollTop -= 8; else if (ev.clientY > br.bottom - 60) pr.scrollTop += 8;
+        };
+        const up = () => {
+            window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+            const d = drag; drag = null;
+            rows.forEach((r) => { r.style.transform = ''; r.classList.remove('dragging'); });
+            if (d && d.to !== d.from) {
+                const base = Player.state.index + 1;
+                Player.move(base + d.from, base + d.to);
+                J.queue = Player.state.queue.slice(base, base + 50).map(slim);
+                J.justDragged = Date.now();
+                hostLoop();
+            }
+            renderPanel(true);
+        };
+        window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
     }
     function onPanelClick(e) {
         const b = e.target.closest('[data-jam]'); if (!b || !J) return;
+        if (J.justDragged && Date.now() - J.justDragged < 400) return;
+        if (e.target.closest('[data-grip]')) return;
         const a = b.dataset.jam;
         if (a === 'close') closePanel();
         if (a === 'invite') showInvite();
@@ -885,13 +985,27 @@ const Jam = (() => {
         if (a === 'toggle') Player.toggle();
         if (a === 'next') Player.next();
         if (a === 'prev') Player.prev();
-        if (a === 'remove') { e.stopPropagation(); const P = Player.state; Player.removeAt(P.index + 1 + (+b.dataset.i)); setTimeout(() => renderPanel(), 50); return; }
+        if (a === 'person' && J.host && b.classList.contains('can')) {
+            UI.openMenu(b, [{ icon: 'x', label: 'Remove ' + b.dataset.name + ' from the Jam', danger: true, run: () => kick(b.dataset.id, b.dataset.name) }]);
+            return;
+        }
+        if (a === 'remove') {
+            e.stopPropagation();
+            const i = +b.dataset.i, q = J.queue[i];
+            if (J.host) { Player.removeAt(Player.state.index + 1 + i); }
+            else if (q) { cmd('remove', { id: q.id, i, name: q.name }); J.queue.splice(i, 1); renderPanel(true); }
+            return;
+        }
         if (a === 'jump' && !e.target.closest('[data-jam="remove"]')) {
             const i = +b.dataset.i;
-            if (J.host) P0.jump(Player.state.index + 1 + i);
+            if (J.host) Player.jump(Player.state.index + 1 + i);
             else if (J.control) cmd('jump', { id: b.dataset.id, i });
             else toast(`Only ${J.hostName || 'the host'} can pick songs in this Jam`);
         }
+    }
+    async function kick(id, name) {
+        try { const r = await call({ op: 'kick', room: J.room, token: J.token, who: id }); J.members = r.members || J.members.filter((m) => m.id !== id); renderPanel(true); paint(); toast(name + ' was removed from the Jam'); }
+        catch (e) { toast(e.message, 'error'); }
     }
     function showInvite() {
         if (!J) return;
@@ -931,5 +1045,5 @@ const Jam = (() => {
             m.querySelector('[data-f]').onsubmit = (e) => { e.preventDefault(); const v = e.target.elements.code.value; close(); join(v); };
         });
     }
-    return { start, join, leave, add, menu, panel: openPanel, get active() { return !!J; }, get host() { return !!(J && J.host); } };
+    return { start, join, leave, add, menu, panel: openPanel, get active() { return !!J; }, get host() { return !!(J && J.host); }, get autoplay() { return !J || !J.host || J.autoplay; } };
 })();

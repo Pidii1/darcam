@@ -1221,3 +1221,18 @@ body:not(.np-open) #engine.bg { opacity: .001; z-index: -1; }
 }
 
 .jam-warn { margin: 8px 0 0; padding: 10px 12px; border-radius: 12px; background: rgba(245,158,11,.14); color: #fcd34d; font-size: 13px; line-height: 1.4; }
+
+/* Jam 2.6: drag to reorder, suggested songs, progress, host label */
+.jam-grip { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 40px; margin: 0 -4px 0 -6px; color: var(--muted); cursor: grab; touch-action: none; flex-shrink: 0; }
+.jam-grip .ic { width: 18px; height: 18px; }
+.jam-row { transition: transform .15s ease; position: relative; background: transparent; }
+.jam-row.dragging { transition: none; z-index: 2; background: #232327; box-shadow: 0 10px 30px rgba(0,0,0,.5); cursor: grabbing; }
+.jam-by.jam-sug { color: #c4b5fd; }
+.jam-by.jam-sug .ic { width: 15px; height: 15px; }
+.jam-prog { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: rgba(255,255,255,.15); overflow: hidden; }
+.jam-prog i { display: block; height: 100%; width: 0; background: #fff; border-radius: 2px; transition: width .5s linear; }
+.jam-time { grid-column: 1 / -1; font-size: 11.5px; color: var(--muted); margin-top: -6px; font-variant-numeric: tabular-nums; }
+.jam-person { position: relative; }
+.jam-person.can { cursor: pointer; }
+.jam-hostlbl { position: absolute; top: 34px; left: 50%; transform: translateX(-50%); font-style: normal; font-size: 9.5px; font-weight: 800; padding: 1px 5px; border-radius: 6px; background: #ff4f7e; color: #fff; letter-spacing: .03em; }
+.jam-switches { display: flex; flex-direction: column; gap: 8px; }

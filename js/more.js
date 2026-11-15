@@ -2,7 +2,7 @@
    car mode, Bahasa Melayu, story pictures, and playlist clean-up (duplicates, merge, smart playlists). */
 'use strict';
 
-const APP_VERSION = '2.5.6';
+const APP_VERSION = '2.6.0';
 const isCap = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 const capPlugin = () => (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.DarcamIsland) || null;
 async function getText(url) {
@@ -335,6 +335,8 @@ const I18n = (() => {
         'Copy link': 'Salin pautan', 'Added to the Jam': 'Ditambah ke Jam', 'You left the Jam': 'Anda keluar dari Jam', 'You ended the Jam': 'Anda tamatkan Jam', 'The Jam has ended': 'Jam sudah tamat',
         'The queue is empty. Add a song!': 'Senarai kosong. Tambah lagu!', 'Songs you pick now go into the Jam': 'Lagu yang anda pilih sekarang masuk ke Jam', 'Your name in the Jam': 'Nama anda dalam Jam',
         'Friends can play, pause and skip': 'Kawan boleh main, jeda dan langkau', 'Only you can control the music': 'Hanya anda boleh kawal muzik', 'End the Jam?': 'Tamatkan Jam?',
+        'Suggested': 'Cadangan', 'Suggested songs': 'Lagu cadangan', 'Back in your Jam': 'Kembali ke Jam anda', 'Plays next in the Jam': 'Dimain seterusnya dalam Jam', 'Host': 'Host',
+        'When the queue runs out, Darcam adds similar songs (marked Suggested)': 'Bila senarai habis, Darcam tambah lagu serupa (ditanda Cadangan)', 'The host removed you from the Jam': 'Host buang anda dari Jam',
         'Sort by': 'Susun ikut', 'Most played': 'Paling banyak dimainkan', 'Random': 'Rawak', 'Newest played': 'Terbaru dimainkan', 'Smart': 'Pintar',
     };
     const PAT = [
