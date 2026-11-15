@@ -67,7 +67,8 @@ function cleanTrack(t) {
     if (id.length < 6 || id.length > 20) return null;
     const out = { id, name: cleanStr(t.name, 160), artist: cleanStr(t.artist, 120), dur: Math.max(0, Math.min(36000, parseInt(t.dur, 10) || 0)), cover: cleanCover(t.cover) };
     if (t.by) out.by = cleanStr(t.by, 24);
-    if (t.auto) out.auto = 1;          // a suggested song (Darcam added it, nobody picked it)
+    if (t.auto) out.auto = 1;
+    if (t.from && !t.by) out.from = cleanStr(t.from, 40);      // came with a playlist or album the host started          // a suggested song (Darcam added it, nobody picked it)
     return out;
 }
 function safeEq(a, b) { const x = Buffer.from(String(a)), y = Buffer.from(String(b)); return x.length === y.length && crypto.timingSafeEqual(x, y); }
@@ -108,7 +109,9 @@ module.exports = async (req, res) => {
     let code = cleanId(input.room, 8).toUpperCase();
     const me = cleanId(input.me) || 'anon';
     const myName = cleanStr(input.name || 'Friend', 24) || 'Friend';
-    const memberRec = (host, joined) => JSON.stringify({ id: me, name: myName, host, seen: now, joined: joined || now });
+    // profile picture: a small JPEG made by Darcam (64 × 64)
+    const pic = /^data:image\/jpeg;base64,[A-Za-z0-9+\/=]{100,12000}$/.test(String(input.pic || '')) ? input.pic : '';
+    const memberRec = (host, joined) => JSON.stringify({ id: me, name: myName, host, seen: now, joined: joined || now, pic });
 
     try {
         if (op === 'create') {

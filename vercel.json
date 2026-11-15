@@ -11,6 +11,10 @@
     {
       "source": "/lyrics_proxy.php",
       "destination": "/api/lyrics"
+    },
+    {
+      "source": "/friends.php",
+      "destination": "/api/friends"
     }
   ],
   "headers": [

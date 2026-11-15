@@ -603,14 +603,14 @@ const Jam = (() => {
     async function call(body) {
         const url = Site.api('jam.php');
         if (!url) throw new Error('Add your Darcam website in Settings first (Jam needs it)');
-        const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, me, name: myName() }) });
+        const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, me, name: myName(), pic: (typeof Profiles !== 'undefined' && Profiles.current().pic64) || '' }) });
         const j = await r.json().catch(() => ({}));
         if (!r.ok) { const e = new Error(j.error || (r.status === 404 ? 'The Jam has ended' : 'Jam: HTTP ' + r.status)); e.status = r.status; throw e; }
         return j;
     }
     const vid = (t) => t && (t.youtube_id || t.id);
-    const isSuggested = (t) => !t._by && (t._auto || t.smart);
-    const slim = (t) => t && ({ id: vid(t), name: T.title(t), artist: T.artist(t), dur: Math.round((t.duration_ms || 0) / 1000), cover: T.cover(t), by: t._by || '', auto: isSuggested(t) ? 1 : 0 });
+    const isSuggested = (t) => !t._by && !t._from && (t._auto || t.smart);
+    const slim = (t) => t && ({ id: vid(t), name: T.title(t), artist: T.artist(t), dur: Math.round((t.duration_ms || 0) / 1000), cover: T.cover(t), by: t._by || '', auto: isSuggested(t) ? 1 : 0, from: (!t._by && t._from) || '' });
     const toTrack = (x) => ({ id: x.id, youtube_id: x.id, name: x.name, artists: [{ name: x.artist || 'Unknown', id: '' }], album: { name: x.artist, images: [{ url: x.cover || `https://i.ytimg.com/vi/${x.id}/mqdefault.jpg` }] },
         cover: x.cover || `https://i.ytimg.com/vi/${x.id}/mqdefault.jpg`, cover_lg: x.cover ? x.cover.replace(/=w\d+-h\d+/, '=w544-h544') : `https://i.ytimg.com/vi/${x.id}/hqdefault.jpg`, duration_ms: (x.dur || 0) * 1000, kind: 'song', _n: 1, _by: x.by || '' });
     const COLORS = ['#f59e0b', '#22c55e', '#38bdf8', '#a78bfa', '#f472b6', '#fb7185', '#facc15', '#2dd4bf'];
@@ -619,9 +619,25 @@ const Jam = (() => {
         if (i >= 0) return COLORS[i % COLORS.length];
         let h = 0; for (const c of String(s)) h = (h * 131 + c.charCodeAt(0)) >>> 0; return COLORS[h % COLORS.length];
     };
-    const avatar = (name, cls = '') => `<i class="jam-av ${cls}" style="background:${colorOf(name)}">${esc((name || '?').trim()[0] || '?').toUpperCase()}</i>`;
+    const avatar = (name, cls = '') => {
+        const m = J && J.members.find((x) => x.name === name);
+        const pic = m && m.pic ? m.pic : (name === myName() && typeof Profiles !== 'undefined' ? Profiles.current().pic64 : '');
+        if (pic) return `<i class="jam-av pic ${cls}"><img src="${esc(pic)}" alt=""></i>`;
+        return `<i class="jam-av ${cls}" style="background:${colorOf(name)}">${esc((name || '?').trim()[0] || '?').toUpperCase()}</i>`;
+    };
     const toast = (msg, type) => Bus.emit('toast', { msg, type });
     const save = () => { if (J) LS.set(SAVE, { room: J.room, token: J.token || '', host: J.host, at: Date.now() }); };
+    // host: keep a copy of what's playing and what's next, so the Jam comes back as it was if Darcam restarts
+    const keep = (t) => t && ({ ...slim(t), by: t._by || '', from: t._from || '', auto: t._auto ? 1 : 0 });
+    let lastKeep = 0;
+    function saveQueue() {
+        if (!J || !J.host || Date.now() - lastKeep < 4000) return;
+        lastKeep = Date.now();
+        const P = Player.state, t = Player.current();
+        if (!t) return;
+        LS.set(SAVE + '_q', { at: Date.now(), playing: !!J.intent, pos: Player.time(), track: keep(t), queue: P.queue.slice(P.index + 1, P.index + 101).map(keep) });
+    }
+    const fromKept = (x) => { const t = toTrack(x); t._by = x.by || ''; if (x.from) t._from = x.from; if (x.auto) t._auto = true; return t; };
     const forget = () => localStorage.removeItem(SAVE);
 
     function askName(then) {
@@ -635,7 +651,8 @@ const Jam = (() => {
             try {
                 const r = await call({ op: 'create', title: myName() + '’s Jam' });
                 J = hostState(r.room, r.token);
-                Player.state.queue.forEach((t, i) => { if (t && !t._by && !t._auto && !t.smart && i >= Player.state.index) t._by = myName(); });
+                const srcName = (Player.state.source && Player.state.source.name) || '';
+                Player.state.queue.forEach((t, i) => { if (t && !t._by && !t._auto && !t.smart && i >= Player.state.index && srcName) t._from = srcName; });
                 save();
                 await hostLoop();
                 J.timer = setInterval(hostLoop, 1500);
@@ -668,6 +685,7 @@ const Jam = (() => {
             (r.cmds || []).forEach(runCmd);
             J.track = slim(Player.current()); J.queue = Player.state.queue.slice(Player.state.index + 1, Player.state.index + 51).map(slim);
             J.hostState = { playing: J.intent, pos: Player.time(), at: Date.now(), rate: P.rate || 1, dur: P.duration };
+            saveQueue();
             paint(); renderPanel();
             J.miss = 0;
         } catch (e) {
@@ -809,8 +827,23 @@ const Jam = (() => {
     Player.addToQueue = (t) => (guest() ? add(t, false) : (J && J.host && t && !t._by && (t._by = myName()), P0.addToQueue(t)));
     Player.playList = (tracks, i = 0, src) => {
         if (!guest()) {
-            if (J && J.host) { (tracks || []).forEach((t) => t && !t._by && (t._by = myName())); setIntent(true); }
-            return P0.playList(tracks, i, src);
+            if (!(J && J.host)) return P0.playList(tracks, i, src);
+            // in a Jam, starting a playlist or album doesn't throw away the songs people added:
+            // they stay right after the song you picked (like Spotify). Playlist songs show where they came from.
+            const P = Player.state;
+            const kept = P.queue.slice(P.index + 1).filter((t) => t && t._by);
+            const name = (src && src.name) || 'a playlist';
+            (tracks || []).forEach((t) => { if (t && !t._by) { t._from = name; t._auto = false; } });
+            setIntent(true);
+            const r = P0.playList(tracks, i, src);
+            if (kept.length) {
+                const ids = new Set(kept.map(vid));
+                const Q = Player.state;
+                Q.queue = Q.queue.filter((t, k) => k <= Q.index || !ids.has(vid(t)) || t._by);
+                Q.queue.splice(Q.index + 1, 0, ...kept);
+                Bus.emit('queue', Q);
+            }
+            return r;
         }
         const t = (tracks || [])[i];
         if (t) add(t, false);
@@ -843,6 +876,15 @@ const Jam = (() => {
         if (s.host) {
             J = hostState(s.room, s.token);
             J.intent = false;
+            const q = LS.get(SAVE + '_q', null);
+            if (q && q.track && !Player.current()) {
+                // put back the song and the queue the Jam had; carry on playing if it was playing a moment ago
+                const list = [fromKept(q.track), ...(q.queue || []).map(fromKept)];
+                const resume = q.playing && Date.now() - q.at < 10 * 60e3;
+                P0.playList(list, 0, { type: 'jam', name: 'Jam' });
+                setTimeout(() => { try { Player.seek(q.pos || 0); } catch (e) {} if (!resume) P0.pause(); }, 2500);
+                J.intent = resume;
+            }
             hostLoop().then(() => { if (!J) return; J.timer = setInterval(hostLoop, 1500); paint(); toast('Back in your Jam'); });
         } else join(s.room, true);
     }, 2500);
@@ -896,7 +938,8 @@ const Jam = (() => {
         const playing = J.host ? J.intent : !!(J.hostState || {}).playing;
         const mine = (q) => q.by && q.by === myName();
         const byChip = (q) => q.by ? `<span class="jam-by" title="Added by ${esc(q.by)}">${avatar(q.by, 'xs')}<em>${esc(mine(q) ? 'You' : q.by)}</em></span>`
-            : q.auto ? `<span class="jam-by jam-sug" title="Suggested by Darcam">${ic('sparkle')}<em>Suggested</em></span>` : '';
+            : q.auto ? `<span class="jam-by jam-sug" title="Suggested by Darcam">${ic('sparkle')}<em>Suggested</em></span>`
+            : q.from ? `<span class="jam-by jam-from" title="From ${esc(q.from)}">${ic('music')}<em>${esc(q.from)}</em></span>` : '';
         const row = (q, i) => `<div class="jam-row ${canControl ? 'tap' : ''}" data-jam="jump" data-i="${i}" data-id="${esc(q.id)}">
             ${J.host ? `<span class="jam-grip" data-grip="${i}" title="Drag to reorder">${ic('grip')}</span>` : ''}
             <img class="jam-cv" src="${esc(q.cover || `https://i.ytimg.com/vi/${q.id}/mqdefault.jpg`)}" alt="" loading="lazy">
@@ -1045,5 +1088,5 @@ const Jam = (() => {
             m.querySelector('[data-f]').onsubmit = (e) => { e.preventDefault(); const v = e.target.elements.code.value; close(); join(v); };
         });
     }
-    return { start, join, leave, add, menu, panel: openPanel, get active() { return !!J; }, get host() { return !!(J && J.host); }, get autoplay() { return !J || !J.host || J.autoplay; } };
+    return { start, join, leave, add, menu, panel: openPanel, get active() { return !!J; }, get room() { return J ? J.room : ''; }, get host() { return !!(J && J.host); }, get autoplay() { return !J || !J.host || J.autoplay; } };
 })();

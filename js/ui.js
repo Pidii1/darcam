@@ -132,7 +132,8 @@ const UI = (() => {
         const m = $('#menu');
         menuAnchor = anchor && anchor.nodeType === 1 ? anchor : null;
         m.innerHTML = items.filter(Boolean).map((it, i) => it === '-' ? '<div class="menu-sep"></div>'
-            : `<button class="menu-item ${it.danger ? 'danger' : ''}" data-mi="${i}">${ic(it.icon || 'music')}<span>${esc(it.label)}</span></button>`).join('');
+            : it.html ? `<div class="menu-block">${it.html}</div>`
+            : `<button class="menu-item ${it.danger ? 'danger' : ''}" data-mi="${i}">${it.iconHTML || ic(it.icon || 'music')}<span>${esc(it.label)}</span></button>`).join('');
         const valid = items.filter(Boolean);
         m.onclick = (e) => { const b = e.target.closest('[data-mi]'); if (!b) return; closeMenu(); const it = valid[+b.dataset.mi]; it && it.run && it.run(); };
         m.classList.add('show');
@@ -154,6 +155,7 @@ const UI = (() => {
         openMenu(anchor, [
             Jam.active ? { icon: 'users', label: 'Add to Jam', run: () => Jam.add(t) } : null,
             { icon: 'play', label: 'Play next', run: () => Player.playNext(t) },
+            typeof Friends !== 'undefined' && Friends.ready ? { icon: 'users', label: 'Send to a friend', run: () => Friends.sendSong(t) } : null,
             { icon: 'queue', label: 'Add to queue', run: () => Player.addToQueue(t) },
             { icon: 'plus', label: 'Add to playlist', run: () => addToPlaylistModal(t) },
             { icon: liked ? 'heartFill' : 'heart', label: liked ? 'Remove from Liked Songs' : 'Save to Liked Songs', run: () => toggleLike(t) },

@@ -2,7 +2,7 @@
    car mode, Bahasa Melayu, story pictures, and playlist clean-up (duplicates, merge, smart playlists). */
 'use strict';
 
-const APP_VERSION = '2.6.0';
+const APP_VERSION = '2.8.1';
 const isCap = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 const capPlugin = () => (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.DarcamIsland) || null;
 async function getText(url) {
@@ -337,6 +337,16 @@ const I18n = (() => {
         'Friends can play, pause and skip': 'Kawan boleh main, jeda dan langkau', 'Only you can control the music': 'Hanya anda boleh kawal muzik', 'End the Jam?': 'Tamatkan Jam?',
         'Suggested': 'Cadangan', 'Suggested songs': 'Lagu cadangan', 'Back in your Jam': 'Kembali ke Jam anda', 'Plays next in the Jam': 'Dimain seterusnya dalam Jam', 'Host': 'Host',
         'When the queue runs out, Darcam adds similar songs (marked Suggested)': 'Bila senarai habis, Darcam tambah lagu serupa (ditanda Cadangan)', 'The host removed you from the Jam': 'Host buang anda dari Jam',
+        'Profile': 'Profil', 'Edit profile': 'Edit profil', 'Add a profile': 'Tambah profil', 'Choose picture': 'Pilih gambar', 'Remove picture': 'Buang gambar', 'Delete this profile': 'Padam profil ini',
+        'Add profile': 'Tambah profil', 'Profile saved': 'Profil disimpan', 'Switch': 'Tukar', 'Your profile': 'Profil anda', 'Type a name': 'Taip nama',
+        'Your name and picture show in a Jam. Everything stays on this device.': 'Nama dan gambar anda keluar dalam Jam. Semua kekal dalam peranti ini.',
+        'Each profile has its own Liked Songs, playlists, history and settings, on this device.': 'Setiap profil ada Lagu yang disukai, playlist, sejarah dan tetapan sendiri, dalam peranti ini.',
+        'Friends': 'Kawan', 'Your friend code': 'Kod kawan anda', 'Add friend': 'Tambah kawan', 'Friend requests': 'Permintaan kawan', 'Accept': 'Terima', 'Decline': 'Tolak',
+        'Your friends': 'Kawan anda', 'For you': 'Untuk anda', 'Join Jam': 'Sertai Jam', 'Remove friend': 'Buang kawan', 'Send to a friend': 'Hantar kepada kawan', 'No friends yet': 'Belum ada kawan',
+        'Share what I’m listening to': 'Kongsi lagu yang saya dengar', 'Friends see your song and your Jam. Turn off to listen privately.': 'Kawan nampak lagu dan Jam anda. Tutup untuk dengar secara peribadi.',
+        'Invite to my Jam': 'Jemput ke Jam saya', 'Send what I’m playing': 'Hantar lagu yang saya main', 'Add their song to queue': 'Tambah lagu dia ke senarai', 'QR code': 'Kod QR', 'Active now': 'Aktif sekarang', 'In a Jam': 'Dalam Jam',
+        'Find friends by name': 'Cari kawan ikut nama', 'Or share your code': 'Atau kongsi kod anda', 'Already your friend': 'Sudah kawan anda', 'Wants to be your friend': 'Nak jadi kawan anda', 'Request sent': 'Permintaan dihantar',
+        'Let people find me by name': 'Benarkan orang cari saya ikut nama', 'Turn off and friends can only add you with your code.': 'Kalau tutup, kawan cuma boleh tambah anda dengan kod.', 'Searching…': 'Sedang cari…',
         'Sort by': 'Susun ikut', 'Most played': 'Paling banyak dimainkan', 'Random': 'Rawak', 'Newest played': 'Terbaru dimainkan', 'Smart': 'Pintar',
     };
     const PAT = [
@@ -679,6 +689,8 @@ const Tidy = (() => {
     const go = () => {
         // 2.5.1: video behind lyrics is on (Wi-Fi only) unless you turn it off yourself
         if (!LS.get('dc_vbg_251', false)) { LS.set('dc_vbg_251', true); if ((Store.settings.videoBg || 'off') === 'off') Store.setSetting('videoBg', 'wifi'); }
+        try { Profiles.start(); } catch (e) { console.warn(e); }
+        try { Friends.start(); } catch (e) { console.warn(e); }
         I18n.start();
         // after an update: say which version you're on now
         const last = LS.get('dc_last_version', '');

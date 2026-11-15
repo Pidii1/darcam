@@ -53,7 +53,6 @@ const Pages = (() => {
             <div class="page home">
                 <header class="home-head">
                     <h1>${greeting()}</h1>
-                    <a class="icon-btn mob-only" href="#/settings" aria-label="Settings">${ic('settings')}</a>
                 </header>
                 ${quick.length ? `<div class="quick-grid">${quick.map((t, i) => quickItem(t, qid, i)).join('')}</div>`
                     : `<div class="welcome glass-soft"><div class="welcome-mark">${LOGO_SVG}</div><div><h3>Welcome to Darcam</h3><p>No account, no login. Search for a song, press play, and all your playlists stay on this device.</p><a class="btn primary" href="#/search">${ic('search')}<span>Search songs</span></a></div></div>`}
@@ -851,6 +850,15 @@ const Pages = (() => {
         const langs = [['en', 'English'], ['ms', 'Malay'], ['id', 'Indonesian'], ['zh-CN', '中文'], ['ja', '日本語'], ['ko', '한국어'], ['ta', 'தமிழ்'], ['ar', 'العربية']];
         render(`<div class="page settings">
             <h1 class="page-h">Settings</h1>
+            <section class="set-group"><h3>Profile</h3>
+                <div class="pf-card">${Profiles.avatarHTML(Profiles.current(), 'lg')}
+                    <span class="pf-card-t"><b>${esc(Profiles.current().name)}</b><small>Your friends see this name and picture, and so does everyone in a Jam.</small></span>
+                    <button class="btn ghost sm" data-pfs="edit">${ic('edit')}<span>Edit</span></button></div>
+                <div class="pf-others">
+                    ${Profiles.list().filter((p) => p.id !== Profiles.current().id).map((p) => `<button class="pf-chip" data-pfs="sw:${esc(p.id)}">${Profiles.avatarHTML(p, 'sm')}<span>${esc(p.name)}</span><small>Switch</small></button>`).join('')}
+                    <a class="pf-chip add" href="#/friends"><span class="pf-av sm plus">${ic('users')}</span><span>Friends</span><small>${typeof Friends !== 'undefined' && Friends.code ? 'Code ' + esc(Friends.code) : 'Add friends'}</small></a>
+                </div>
+            </section>
             <section class="set-group"><h3>Playback</h3>
                 ${tog('autoplay', 'Autoplay', 'Play similar songs when the queue ends')}
                 <label class="set-row"><span><b>Crossfade</b><small>The next song fades in while the current one fades out</small></span>
@@ -941,7 +949,8 @@ const Pages = (() => {
         const nn = v.querySelector('#notifNew');
         if (nn) nn.addEventListener('change', (e) => { e.stopPropagation(); ReleaseNotify.set(e.target.checked); const pl = window.Capacitor.Plugins.DarcamIsland; if (e.target.checked && pl && pl.requestNotifications) pl.requestNotifications().catch(() => {}); UI.toast('Saved'); });
         if (siteIn) siteIn.addEventListener('change', (e) => { e.stopPropagation(); Site.set(siteIn.value); UI.toast('Saved'); });
-        if (nameIn) nameIn.addEventListener('change', (e) => { e.stopPropagation(); localStorage.setItem('dc_name', nameIn.value.trim().slice(0, 24)); UI.toast('Saved'); });
+        if (nameIn) nameIn.addEventListener('change', (e) => { e.stopPropagation(); const n = nameIn.value.trim().slice(0, 24); if (n) Profiles.setName(n); UI.toast('Saved'); });
+        v.querySelectorAll('[data-pfs]').forEach((b) => (b.onclick = () => { const a = b.dataset.pfs; if (a === 'edit') Profiles.editor(Profiles.current()); if (a === 'add') Profiles.editor(null, true); if (a.startsWith('sw:')) Profiles.switchTo(a.slice(3)); }));
         v.addEventListener('change', (e) => {
             const el = e.target.closest('[data-set]'); if (!el) return;
             Store.setSetting(el.dataset.set, el.type === 'checkbox' ? el.checked : el.value);
@@ -995,5 +1004,5 @@ const Pages = (() => {
     }
 
     const routes = { home, search, artist, list, playlist, liked, library, settings, mix, wrapped, folder, genre, s: sharedSong, p: sharedList, jam: jamLink };
-    return { go, playRemotePlaylist };
+    return { go, playRemotePlaylist, addRoute: (name, fn) => { routes[name] = fn; } };
 })();

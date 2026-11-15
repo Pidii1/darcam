@@ -1,12 +1,11 @@
 {
-  "version": "2.6.0",
+  "version": "2.8.1",
   "notes": [
-    "Jam: the music no longer pauses when someone leaves the app",
-    "Jam: songs Darcam adds are marked Suggested, and the host can turn them off",
-    "Jam: host can drag songs to reorder, remove songs and remove people",
-    "Jam carries on when Darcam is closed and opened again"
+    "Find friends by typing their name",
+    "See what your friends are playing and join their Jam",
+    "Send songs to friends and invite them to your Jam"
   ],
-  "android": "Darcam-2_6_0.apk",
+  "android": "Darcam-2_8_1.apk",
   "windows": "https://github.com/Pidii1/darcam/releases/latest/download/Darcam-Setup.msi",
   "size": ""
 }

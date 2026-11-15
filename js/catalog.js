@@ -9,6 +9,7 @@ const Catalog = (() => {
 
     // ---------- cache ----------
     const CP = 'dc_cache_v2:';
+    try { Object.keys(localStorage).filter((x) => x.startsWith(CP) && (localStorage.getItem(x) || '').length > 250000).forEach((x) => localStorage.removeItem(x)); } catch (e) {}
     function cget(k) {
         const v = LS.get(CP + k, null);
         if (!v) return null;
@@ -16,6 +17,16 @@ const Catalog = (() => {
         return v.d;
     }
     function cset(k, d, ttl) {
+        // very big answers (whole charts and long playlists) aren't kept: they filled the phone's storage
+        // and left no room for your library
+        let size = 0; try { size = JSON.stringify(d).length; } catch (e) { return; }
+        if (size > 250000) return;
+        let total = 0; const keys = Object.keys(localStorage).filter((x) => x.startsWith(CP));
+        keys.forEach((x) => { total += (localStorage.getItem(x) || '').length; });
+        if (total + size > 1500000) {            // keep the cache under ~1.5 MB: drop the ones that expire first
+            keys.map((x) => { try { return [x, JSON.parse(localStorage.getItem(x)).exp || 0]; } catch (e) { return [x, 0]; } })
+                .sort((a, b2) => a[1] - b2[1]).slice(0, Math.ceil(keys.length / 2)).forEach(([x]) => localStorage.removeItem(x));
+        }
         if (!LS.set(CP + k, { exp: Date.now() + ttl, d })) {
             // storage full → drop old cache entries and retry once
             Object.keys(localStorage).filter((x) => x.startsWith(CP) || x.startsWith('yt_cache_v1:')).slice(0, 80).forEach((x) => localStorage.removeItem(x));
