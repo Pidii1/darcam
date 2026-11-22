@@ -612,6 +612,7 @@ const Pages = (() => {
                 <button class="fab xl" data-pact="play" ${tracks.length ? '' : 'disabled'}>${ic('play')}</button>
                 <button class="icon-btn lg" data-pact="shuffle" title="Shuffle" ${tracks.length ? '' : 'disabled'}>${ic('shuffle')}</button>
                 <button class="icon-btn lg smart-btn" data-pact="smart" title="Smart Shuffle: shuffle + songs with the same vibe" ${tracks.length ? '' : 'disabled'}>${ic('shuffleSmart')}</button>
+                ${tracks.length ? `<button class="btn ghost" data-pact="poster" title="Make a poster from up to 5 songs">${ic('image')}<span>Poster</span></button>` : ''}
                 ${editable ? `<button class="icon-btn lg" data-pact="more">${ic('more')}</button>` : ''}
             </div>
             ${tracks.length ? UI.trackList(tracks, src) : `<div class="empty big">${ic(type === 'liked' ? 'heart' : 'music')}<p>${type === 'liked' ? 'Songs you like will appear here' : 'This playlist is empty'}</p><small>Tap ${type === 'liked' ? 'the heart' : '⋯ → Add to playlist'} on any song.</small><a class="btn primary" href="#/search">${ic('search')}<span>Search songs</span></a></div>`}
@@ -624,6 +625,7 @@ const Pages = (() => {
             if (a === 'play') Player.playList(tracks, 0, src);
             if (a === 'shuffle') Player.playList(shuffleArr(tracks), 0, src);
             if (a === 'smart') Player.playSmart(tracks, src);
+            if (a === 'poster') Poster.pick(tracks, title);
             if (a === 'rename' || a === 'cover') editDetails(pid);
             if (a === 'more') UI.openMenu(b, [
                 (Store.playlist(pid) || {}).smart ? { icon: 'sparkle', label: 'Edit rules', run: () => Tidy.editor(pid) } : null,
@@ -895,6 +897,7 @@ const Pages = (() => {
                     <p class="muted small">One-time setup (free): open <b>discord.com/developers/applications</b> → <b>New Application</b> → name it <b>Darcam</b> → copy the <b>Application ID</b> and paste it here. The name you give it is what Discord shows (“Listening to Darcam”).</p>
                     <input class="field sm" id="wDiscordId" inputmode="numeric" placeholder="e.g. 1234567890123456789" style="min-width:260px">
                 </details>
+                <div class="set-row" id="wDiscordRow"><span><b>Discord status</b><small id="wDiscordTxt">Checking…</small></span><button class="btn ghost sm" id="wDiscordTest">Test</button></div>
             </section>
             <section class="set-group"><h3>Sharing &amp; Jam</h3>
                 <label class="set-row"><span><b>Your Darcam website</b><small>${Site.onWeb() ? 'This website: ' + esc(Site.base()) : 'Where you put the web version (with yt.php and jam.php). Share links and Jam use it.'}</small></span>${Site.onWeb() ? '' : `<input class="field sm" id="siteIn" placeholder="example.com/darcam" value="${esc(localStorage.getItem('dc_site') || '')}" style="min-width:220px">`}</label>
@@ -944,6 +947,15 @@ const Pages = (() => {
                 setP({ discord: e.target.checked });
             });
             v.querySelector('#wDiscordId').addEventListener('change', (e) => { e.stopPropagation(); setP({ discordId: e.target.value }); });
+            const dTxt = v.querySelector('#wDiscordTxt'), dWords = (st) => ({
+                off: 'Off. Turn on the switch above.', noid: 'Paste your Darcam Application ID above.', looking: 'Looking for the Discord app…',
+                nodiscord: 'Discord app not found. Open the Discord app on this PC (not the website). If Discord runs as administrator, run Darcam the same way.',
+                handshake: 'Talking to Discord…', ready: 'Connected' + (st.msg ? (st.msg.startsWith('Showing') || st.msg.startsWith('Status') ? '. ' + st.msg : ' as ' + st.msg) : '') + '. Play a song to show it.',
+                error: 'Discord said: ' + (st.msg || 'error'),
+            })[st.s] || st.s;
+            const dPoll = () => { if (!document.body.contains(dTxt) || !window.darcamNative.discordStatus) return; window.darcamNative.discordStatus(false).then((st) => { dTxt.textContent = dWords(st); }).catch(() => {}); setTimeout(dPoll, 2000); };
+            if (window.darcamNative.discordStatus) dPoll(); else v.querySelector('#wDiscordRow').hidden = true;
+            v.querySelector('#wDiscordTest').onclick = () => { window.darcamNative.discordStatus(true).then((st) => { dTxt.textContent = dWords(st); UI.toast(st.s === 'ready' ? 'Check your Discord profile now' : 'Not connected yet'); }); };
         }
         v.querySelectorAll('[data-lang]').forEach((b) => b.onclick = () => { if (b.dataset.lang !== I18n.lang) I18n.set(b.dataset.lang); });
         const nn = v.querySelector('#notifNew');
