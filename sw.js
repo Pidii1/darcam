@@ -1,5 +1,5 @@
 /* Darcam service worker: app shell offline, everything else from the network */
-const SHELL = 'darcam-shell-v26';
+const SHELL = 'darcam-shell-v27';
 const FILES = ['./', './index.html', './css/darcam.css', './js/util.js', './js/store.js', './js/innertube.js', './js/catalog.js', './js/importer.js', './js/extras.js', './js/profiles.js', './js/friends.js', './js/more.js', './js/poster.js', './img/mark.svg', './img/icon-192.png', './js/transfer.js', './js/player.js', './js/lyrics.js', './js/ui.js', './js/pages.js', './js/main.js', './native.js', './img/icon-192.png', './img/icon.svg'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(SHELL).then((c) => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== SHELL).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });

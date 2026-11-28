@@ -1,11 +1,10 @@
 {
-  "version": "2.9.8",
+  "version": "2.9.9",
   "notes": [
-    "Discord: new status line in Settings shows if Darcam is connected, and why not",
-    "Discord: Test button, and a simpler status is used if Discord rejects the full one",
-    "Discord: keeps trying to connect when Discord opens later"
+    "Songs keep playing when you leave the app on Android",
+    "New-song alerts no longer replace the Now playing notification"
   ],
-  "android": "https://github.com/Pidii1/darcam/releases/download/v2.9.8/Darcam-2_9_8.apk",
+  "android": "https://github.com/Pidii1/darcam/releases/download/v2.9.9/Darcam-2_9_9.apk",
   "windows": "https://github.com/Pidii1/darcam/releases/latest/download/Darcam-Setup.msi",
   "size": ""
 }

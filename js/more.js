@@ -2,7 +2,7 @@
    car mode, Bahasa Melayu, story pictures, and playlist clean-up (duplicates, merge, smart playlists). */
 'use strict';
 
-const APP_VERSION = '2.9.8';
+const APP_VERSION = '2.9.9';
 const isCap = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 const capPlugin = () => (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.DarcamIsland) || null;
 async function getText(url) {

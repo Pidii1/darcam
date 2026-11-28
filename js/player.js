@@ -142,6 +142,7 @@ const Player = (() => {
             syncTime();
         } else if (s === S.PAUSED) {
             P.playing = false; P.buffering = false; syncTime();
+            keepAlive();
         } else if (s === S.BUFFERING) {
             P.buffering = true; syncTime();
         } else if (s === S.ENDED) {
@@ -152,6 +153,26 @@ const Player = (() => {
         }
         Bus.emit('state', P);
         updateMediaSession();
+    }
+
+    // Android: when you leave the app, the system can pause the song by itself.
+    // If the song stops without you pressing pause, start it again (a few tries, only right after leaving the app).
+    let userPauseAt = 0, hiddenAt = 0, revive = [];
+    const isApp = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+    const markHidden = () => { hiddenAt = Date.now(); };
+    document.addEventListener('visibilitychange', () => { if (document.hidden) markHidden(); });
+    window.addEventListener('blur', markHidden);
+    window.addEventListener('pagehide', markHidden);
+    try { const A = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App; if (A && A.addListener) A.addListener('pause', markHidden); } catch (e) {}
+    function keepAlive() {
+        if (!isApp() || !current()) return;
+        const now = Date.now();
+        if (now - userPauseAt < 2000) return;                       // you pressed pause
+        if (!(document.hidden || now - hiddenAt < 6000)) return;    // only when you have just left the app
+        revive = revive.filter((t) => now - t < 20000);
+        if (revive.length >= 4) return;                             // don't fight forever
+        revive.push(now);
+        setTimeout(() => { try { if (!P.playing && Date.now() - userPauseAt > 2000 && yt) yt.playVideo(); } catch (e) {} }, 350);
     }
 
     // Blocked song → quietly play another allowed version of the same song
@@ -298,7 +319,7 @@ const Player = (() => {
             setTimeout(() => { try { if (!P.muted) { yt.unMute(); yt.setVolume(P.volume); } } catch (e) {} }, 500);
         }, 1200);
     }
-    function pause() { settleFade(); if (P.ready && yt) yt.pauseVideo(); }
+    function pause() { userPauseAt = Date.now(); settleFade(); if (P.ready && yt) yt.pauseVideo(); }
     function toggle() {
         if (!current()) { Bus.emit('toast', { msg: 'Pick a song first' }); return; }
         const st = engineState();
